@@ -8,9 +8,6 @@ import com.github.kwhat.jnativehook.NativeHookException;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 public class HotkeyService implements NativeKeyListener, AutoCloseable {
 
     private final MacroPlayer player;

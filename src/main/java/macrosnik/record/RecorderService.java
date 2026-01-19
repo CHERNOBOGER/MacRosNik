@@ -56,7 +56,7 @@ public class RecorderService
         return System.nanoTime();
     }
 
-    /* ===== keyboard ===== */
+    /* ===== Клавиатура ===== */
 
     @Override
     public void nativeKeyPressed(NativeKeyEvent e) {
@@ -72,7 +72,7 @@ public class RecorderService
         buffer.add(new RawKey(e.getKeyCode(), false, now()));
     }
 
-    /* ===== mouse ===== */
+    /* ===== Мышь ===== */
 
     @Override
     public void nativeMouseMoved(NativeMouseEvent e) {

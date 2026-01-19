@@ -15,7 +15,6 @@ public class MainApp extends Application {
         stage.setTitle("MacRosNik");
         stage.setScene(scene);
 
-        // 🔥 ВАЖНО: запуск после инициализации JavaFX
         controller.startHotkeys();
 
         stage.setOnCloseRequest(e -> controller.shutdown());

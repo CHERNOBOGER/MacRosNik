@@ -56,13 +56,13 @@ public class MainController {
 
 
     private Parent buildToolbar() {
-        Button btnLoad = new Button("Load JSON");
-        Button btnSave = new Button("Save JSON");
-        Button btnPlay = new Button("Play");
-        Button btnPause = new Button("Pause (F8)");
-        Button btnStop = new Button("Stop (F12)");
-        Button btnRecord = new Button("Record");
-        Button btnStopRec = new Button("Stop Rec");
+        Button btnLoad = new Button("Загрузить");
+        Button btnSave = new Button("Сохранить");
+        Button btnPlay = new Button("Запустить");
+        Button btnPause = new Button("Пауза");
+        Button btnStop = new Button("Остановка");
+        Button btnRecord = new Button("Запись");
+        Button btnStopRec = new Button("Остановить запись");
 
         btnRecord.setOnAction(e -> {
             recorder.start();
@@ -82,20 +82,6 @@ public class MainController {
             btnPlay.setDisable(false);
             btnPause.setDisable(false);
         });
-//
-//        btnStopRec.setOnAction(e -> {
-//            var raw = recorder.stop();
-//            System.out.println("Recorded events: " + raw.size());
-//
-//            var aggregator = new macrosnik.process.EventAggregator(
-//                    new macrosnik.process.AggregationConfig()
-//            );
-//
-//            currentMacro = aggregator.aggregate(raw);
-//            refreshTable();
-//        });
-
-
 
         btnLoad.setOnAction(e -> {
             try {
@@ -137,13 +123,13 @@ public class MainController {
     }
 
     private Parent buildTable() {
-        TableColumn<MacroTableRow, String> colType = new TableColumn<>("Type");
+        TableColumn<MacroTableRow, String> colType = new TableColumn<>("Тип");
         colType.setCellValueFactory(v -> v.getValue().typeProperty());
 
-        TableColumn<MacroTableRow, String> colDelay = new TableColumn<>("DelayBefore (ms)");
+        TableColumn<MacroTableRow, String> colDelay = new TableColumn<>("Задержка");
         colDelay.setCellValueFactory(v -> v.getValue().delayProperty());
 
-        TableColumn<MacroTableRow, String> colDetails = new TableColumn<>("Details");
+        TableColumn<MacroTableRow, String> colDetails = new TableColumn<>("Детали");
         colDetails.setCellValueFactory(v -> v.getValue().detailsProperty());
 
         table.getColumns().addAll(colType, colDelay, colDetails);
@@ -157,7 +143,7 @@ public class MainController {
     }
 
     private Parent buildBottomBar() {
-        Label hint = new Label("Сейчас: Play/Pause/Stop работают. Запись и хоткеи подключим следующим шагом.");
+        Label hint = new Label("Пауза (F8), Остановка (F12)");
         BorderPane.setMargin(hint, new Insets(10, 0, 0, 0));
         return hint;
     }

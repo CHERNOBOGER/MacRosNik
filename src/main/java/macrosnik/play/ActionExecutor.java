@@ -1,10 +1,7 @@
 package macrosnik.play;
 
 import macrosnik.domain.*;
-import macrosnik.domain.MouseMovePathAction.PathPoint;
-import macrosnik.domain.enums.KeyActionType;
 import macrosnik.domain.enums.MouseButton;
-import macrosnik.domain.enums.MouseButtonActionType;
 
 import java.awt.*;
 import java.awt.event.InputEvent;
@@ -12,7 +9,6 @@ import java.awt.event.InputEvent;
 public class ActionExecutor {
 
     public void execute(Action action, Robot robot, MacroPlayer player) throws InterruptedException {
-        // delayBefore
         if (action.delayBeforeMs > 0) {
             sleepInterruptible(action.delayBeforeMs, player);
         }

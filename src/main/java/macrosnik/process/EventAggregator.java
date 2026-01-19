@@ -1,7 +1,6 @@
 package macrosnik.process;
 
 import macrosnik.domain.*;
-import macrosnik.domain.MouseMovePathAction.PathPoint;
 import macrosnik.domain.enums.KeyActionType;
 import macrosnik.domain.enums.MouseButton;
 import macrosnik.domain.enums.MouseButtonActionType;
@@ -32,7 +31,6 @@ public class EventAggregator {
             long delayMs = nanosToMs(ev.timeNanos() - lastTime);
             lastTime = ev.timeNanos();
 
-            // если идёт накопление траектории — проверим, надо ли её сбросить
             if (!(ev instanceof RawMouseMove)) {
                 flushPathIfNeeded(pathBuilder, macro);
             }
@@ -64,9 +62,7 @@ public class EventAggregator {
                 continue;
             }
 
-            if (ev instanceof RawMouseWheel mw) {
-                // пока можно пропустить или позже сделать WheelAction
-            }
+            //if (ev instanceof RawMouseWheel mw) {}
         }
 
         flushPathIfNeeded(pathBuilder, macro);

@@ -24,7 +24,6 @@ public class SettingsStorage {
             }
             return mapper.readValue(path.toFile(), AppSettings.class);
         } catch (Exception e) {
-            // если файл битый — не падаем, возвращаем дефолт
             AppSettings s = new AppSettings();
             try { save(s); } catch (IOException ignored) { }
             return s;
