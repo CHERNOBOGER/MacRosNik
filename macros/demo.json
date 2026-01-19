@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Demo",
+  "actions": [
+    {
+      "type": "MOUSE_MOVE_PATH",
+      "delayBeforeMs": 500,
+      "coordinateMode": "SCREEN_ABSOLUTE",
+      "points": [
+        { "x": 400, "y": 400, "dtMs": 0 },
+        { "x": 600, "y": 400, "dtMs": 200 },
+        { "x": 600, "y": 600, "dtMs": 200 }
+      ]
+    },
+    {
+      "type": "MOUSE_BUTTON",
+      "delayBeforeMs": 200,
+      "button": "LEFT",
+      "action": "CLICK"
+    },
+    {
+      "type": "DELAY",
+      "delayBeforeMs": 0,
+      "durationMs": 300
+    },
+    {
+      "type": "MOUSE_MOVE_PATH",
+      "delayBeforeMs": 500,
+      "coordinateMode": "SCREEN_ABSOLUTE",
+      "points": [
+        { "x": 400, "y": 400, "dtMs": 0 },
+        { "x": 600, "y": 400, "dtMs": 200 },
+        { "x": 600, "y": 600, "dtMs": 200 }
+      ]
+    }
+  ]
+}
