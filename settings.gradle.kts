@@ -10,15 +10,3 @@ plugins {
 }
 
 rootProject.name = "MacRosNik"
-
-toolchainManagement {
-    jvm {
-        javaRepositories {
-            repository("foojay") {
-                resolverClass.set(
-                    org.gradle.toolchains.foojay.FoojayToolchainResolver::class.java
-                )
-            }
-        }
-    }
-}
