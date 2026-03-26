@@ -40,6 +40,11 @@ public class ActionExecutor {
             return;
         }
 
+        if (action instanceof TextInputAction textInputAction) {
+            executeTextInput(textInputAction, robot, player);
+            return;
+        }
+
         throw new IllegalArgumentException("Unknown action class: " + action.getClass());
     }
 
@@ -83,6 +88,11 @@ public class ActionExecutor {
         } else {
             robot.keyRelease(action.keyCode);
         }
+    }
+
+    private void executeTextInput(TextInputAction action, RobotAdapter robot, MacroPlayer player) throws InterruptedException {
+        player.checkpoint();
+        robot.inputText(action.text);
     }
 
     private int toMask(MouseButton button) {

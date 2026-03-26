@@ -11,7 +11,7 @@ public class MainApp extends Application {
     public void start(Stage stage) {
         MainController controller = new MainController(stage);
 
-        Scene scene = new Scene(controller.root(), 1050, 680);
+        Scene scene = new Scene(controller.root(), 1234, 666);
         stage.setTitle("MacRosNik");
         stage.setScene(scene);
 

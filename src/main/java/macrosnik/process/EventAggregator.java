@@ -7,8 +7,9 @@ import macrosnik.domain.enums.MouseButtonActionType;
 import macrosnik.record.*;
 import macrosnik.util.NativeKeyCodeMapper;
 
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class EventAggregator {
 
@@ -27,6 +28,7 @@ public class EventAggregator {
 
         long lastTime = rawEvents.get(0).timeNanos();
         MouseMovePathBuilder pathBuilder = new MouseMovePathBuilder(config);
+        Set<Integer> pressedKeys = new HashSet<>();
 
         for (RawEvent ev : rawEvents) {
             long delayMs = nanosToMs(ev.timeNanos() - lastTime);
@@ -53,6 +55,14 @@ public class EventAggregator {
             }
 
             if (ev instanceof RawKey rk) {
+                if (rk.pressed()) {
+                    if (!pressedKeys.add(rk.keyCode())) {
+                        continue;
+                    }
+                } else {
+                    pressedKeys.remove(rk.keyCode());
+                }
+
                 macro.actions.add(new KeyAction(
                         delayMs,
                         NativeKeyCodeMapper.toAwt(rk.keyCode()),

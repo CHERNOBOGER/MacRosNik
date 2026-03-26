@@ -69,4 +69,22 @@ class EventAggregatorTest {
         assertEquals(MouseButton.RIGHT, rightUp.button);
         assertEquals(MouseButtonActionType.UP, rightUp.action);
     }
+
+    @Test
+    void aggregateIgnoresRepeatedKeyPressedEventsWhileKeyIsHeld() {
+        List<RawEvent> rawEvents = List.of(
+                new RawKey(30, true, 1_000_000),
+                new RawKey(30, true, 5_000_000),
+                new RawKey(30, true, 10_000_000),
+                new RawKey(30, false, 20_000_000)
+        );
+
+        Macro macro = aggregator.aggregate(rawEvents);
+        assertEquals(2, macro.actions.size());
+
+        KeyAction keyDown = assertInstanceOf(KeyAction.class, macro.actions.get(0));
+        KeyAction keyUp = assertInstanceOf(KeyAction.class, macro.actions.get(1));
+        assertEquals(KeyActionType.DOWN, keyDown.action);
+        assertEquals(KeyActionType.UP, keyUp.action);
+    }
 }

@@ -2,6 +2,7 @@ package macrosnik.play;
 
 import macrosnik.domain.KeyAction;
 import macrosnik.domain.MouseButtonAction;
+import macrosnik.domain.TextInputAction;
 import macrosnik.domain.enums.KeyActionType;
 import macrosnik.domain.enums.MouseButton;
 import macrosnik.domain.enums.MouseButtonActionType;
@@ -15,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ActionExecutorTest {
 
     @Test
-    void executesMouseClickAndKeyPress() throws Exception {
+    void executesMouseClickKeyPressAndTextInput() throws Exception {
         ActionExecutor executor = new ActionExecutor();
         MacroPlayer player = new MacroPlayer();
         FakeRobot robot = new FakeRobot();
@@ -23,8 +24,9 @@ class ActionExecutorTest {
         executor.execute(new MouseButtonAction(0, MouseButton.LEFT, MouseButtonActionType.CLICK), robot, player);
         executor.execute(new KeyAction(0, 65, KeyActionType.DOWN), robot, player);
         executor.execute(new KeyAction(0, 65, KeyActionType.UP), robot, player);
+        executor.execute(new TextInputAction(0, "Привет"), robot, player);
 
-        assertEquals(List.of("mousePress:1024", "mouseRelease:1024", "keyPress:65", "keyRelease:65"), robot.calls);
+        assertEquals(List.of("mousePress:1024", "mouseRelease:1024", "keyPress:65", "keyRelease:65", "inputText:Привет"), robot.calls);
     }
 
     private static class FakeRobot implements RobotAdapter {
@@ -53,6 +55,11 @@ class ActionExecutorTest {
         @Override
         public void keyRelease(int keyCode) {
             calls.add("keyRelease:" + keyCode);
+        }
+
+        @Override
+        public void inputText(String text) {
+            calls.add("inputText:" + text);
         }
     }
 }

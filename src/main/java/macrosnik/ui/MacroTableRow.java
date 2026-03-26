@@ -26,11 +26,17 @@ public class MacroTableRow {
             int n = mouseMovePathAction.points.size();
             String first = n > 0 ? fmt(mouseMovePathAction.points.get(0)) : "-";
             String last = n > 0 ? fmt(mouseMovePathAction.points.get(n - 1)) : "-";
-            row.details.set("Точек: " + n + ", от " + first + " до " + last + ", режим: " + modeName(mouseMovePathAction.coordinateMode));
+            row.details.set("Точек: " + n
+                    + ", от " + first
+                    + " до " + last
+                    + ", время: " + totalPathDuration(mouseMovePathAction) + " мс"
+                    + ", режим: " + modeName(mouseMovePathAction.coordinateMode));
         } else if (action instanceof MouseButtonAction mouseButtonAction) {
             row.details.set(mouseButtonName(mouseButtonAction.button) + ", действие: " + mouseActionName(mouseButtonAction.action));
         } else if (action instanceof KeyAction keyAction) {
-            row.details.set("Клавиша: " + KeyEvent.getKeyText(keyAction.keyCode) + ", действие: " + keyActionName(keyAction.action));
+            row.details.set("Клавиша: " + keyName(keyAction.keyCode) + ", действие: " + keyActionName(keyAction.action));
+        } else if (action instanceof TextInputAction textInputAction) {
+            row.details.set("Текст: " + previewText(textInputAction.text));
         } else {
             row.details.set(action.getClass().getSimpleName());
         }
@@ -42,6 +48,7 @@ public class MacroTableRow {
         if (action instanceof MouseMovePathAction) return "Перемещение мыши";
         if (action instanceof MouseButtonAction) return "Кнопка мыши";
         if (action instanceof KeyAction) return "Клавиатура";
+        if (action instanceof TextInputAction) return "Ввод текста";
         return action.actionType().name();
     }
 
@@ -75,6 +82,37 @@ public class MacroTableRow {
 
     private static String fmt(PathPoint point) {
         return "(" + point.x + ", " + point.y + ")";
+    }
+
+    private static String keyName(int keyCode) {
+        return switch (keyCode) {
+            case KeyEvent.VK_ENTER -> "Ввод";
+            case KeyEvent.VK_SPACE -> "Пробел";
+            case KeyEvent.VK_UP -> "Вверх";
+            case KeyEvent.VK_DOWN -> "Вниз";
+            case KeyEvent.VK_LEFT -> "Влево";
+            case KeyEvent.VK_RIGHT -> "Вправо";
+            default -> KeyEvent.getKeyText(keyCode);
+        };
+    }
+
+    private static String previewText(String text) {
+        if (text == null || text.isEmpty()) {
+            return "\"\"";
+        }
+        String normalized = text.replace("\n", "\\n");
+        if (normalized.length() > 40) {
+            normalized = normalized.substring(0, 37) + "...";
+        }
+        return '"' + normalized + '"';
+    }
+
+    private static long totalPathDuration(MouseMovePathAction action) {
+        long total = 0;
+        for (PathPoint point : action.points) {
+            total += point.dtMs;
+        }
+        return total;
     }
 
     public StringProperty typeProperty() { return type; }

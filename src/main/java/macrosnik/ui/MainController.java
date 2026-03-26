@@ -1,14 +1,17 @@
 package macrosnik.ui;
 
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -58,7 +61,7 @@ public class MainController {
         root.setCenter(buildTabs());
         root.setBottom(buildBottomBar());
 
-        dslArea.setPromptText("Пример:\nждать 500\nклавиша CTRL вниз\nклавиша C нажать\nмышь двигать 500 300\nклик лкм");
+        dslArea.setPromptText("");
         refreshAll();
     }
 
@@ -83,7 +86,7 @@ public class MainController {
     private Parent buildTabs() {
         TabPane tabPane = new TabPane();
         tabPane.getTabs().add(new Tab("Макрос", buildTable()));
-        tabPane.getTabs().add(new Tab("DSL", buildDslPanel()));
+        tabPane.getTabs().add(new Tab("Сценарий", buildDslPanel()));
         tabPane.getTabs().add(new Tab("Справка", buildHelpPanel()));
         tabPane.getTabs().forEach(tab -> tab.setClosable(false));
         return tabPane;
@@ -129,8 +132,8 @@ public class MainController {
         Button btnPlay = new Button("Запустить");
         Button btnPause = new Button("Пауза / продолжить");
         Button btnStop = new Button("Стоп");
-        Button btnFromDsl = new Button("DSL → макрос");
-        Button btnToDsl = new Button("Макрос → DSL");
+        Button btnFromDsl = new Button("Сценарий → макрос");
+        Button btnToDsl = new Button("Макрос → сценарий");
 
         btnNew.setOnAction(e -> newMacro());
         btnOpen.setOnAction(e -> openMacro());
@@ -179,21 +182,49 @@ public class MainController {
     private Parent buildDslPanel() {
         dslArea.setWrapText(false);
 
-        Button validateButton = new Button("Проверить DSL");
-        Button applyButton = new Button("Применить к текущему макросу");
+        Button validateButton = new Button("Проверить сценарий");
+        Button applyButton = new Button("Применить к макросу");
         Button exportButton = new Button("Заполнить из макроса");
+        applyButton.setDefaultButton(true);
 
         validateButton.setOnAction(e -> validateDsl());
         applyButton.setOnAction(e -> applyDslToMacro());
         exportButton.setOnAction(e -> fillDslFromMacro());
 
+        HBox topActions = new HBox(8, validateButton, exportButton);
+        HBox bottomActions = new HBox(applyButton);
+        bottomActions.setAlignment(Pos.CENTER_RIGHT);
+
+        StackPane editorPane = new StackPane(dslArea, createScenarioPlaceholder());
+        VBox.setVgrow(editorPane, Priority.ALWAYS);
+
         VBox box = new VBox(8,
-                new Label("Текстовое описание макроса"),
-                new HBox(8, validateButton, applyButton, exportButton),
-                dslArea
+                new Label("Редактор сценария"),
+                topActions,
+                editorPane,
+                bottomActions
         );
-        VBox.setVgrow(dslArea, Priority.ALWAYS);
         return box;
+    }
+
+    private Label createScenarioPlaceholder() {
+        Label placeholder = new Label("""
+                Пример сценария:
+                Подождать мс: 500
+                Нажать ЛКМ: 400 300
+                Провести мышью: 400 300 -> 700 420 350 мс
+                Нажать клавишу: Ввод
+                Ввести текст: "Привет"
+                Нажать сочетание: Alt+Tab
+                """.stripTrailing());
+        placeholder.setWrapText(true);
+        placeholder.setMouseTransparent(true);
+        placeholder.setOpacity(0.45);
+        placeholder.maxWidthProperty().bind(dslArea.widthProperty().subtract(24));
+        placeholder.visibleProperty().bind(dslArea.textProperty().isEmpty());
+        StackPane.setAlignment(placeholder, Pos.TOP_LEFT);
+        StackPane.setMargin(placeholder, new Insets(8, 10, 8, 10));
+        return placeholder;
     }
 
     private Parent buildHelpPanel() {
@@ -203,13 +234,16 @@ public class MainController {
         help.setText("Основные сценарии:\n\n"
                 + "1. Запись: нажмите 'Начать запись', выполните действия, затем 'Остановить запись'.\n"
                 + "2. Сохранение: используйте 'Сохранить как', чтобы выбрать свой JSON-файл.\n"
-                + "3. DSL: на вкладке DSL можно описывать макрос текстом.\n\n"
-                + "Примеры DSL:\n"
-                + "ждать 500\n"
-                + "клавиша CTRL вниз\n"
-                + "клавиша C нажать\n"
-                + "мышь двигать 400 300\n"
-                + "клик лкм\n\n"
+                + "3. Сценарий: на вкладке 'Сценарий' можно описывать макрос текстом.\n\n"
+                + "Примеры сценариев:\n"
+                + "Подождать мс: 500\n"
+                + "Нажать ЛКМ: 400 300\n"
+                + "Провести мышью: 400 300 -> 700 420 350 мс\n"
+                + "Нажать клавишу: Ввод\n"
+                + "Ввести текст: \"Привет\"\n"
+                + "Нажать сочетание: Alt+Tab\n"
+                + "Зажать клавишу: Ctrl\n"
+                + "Отпустить клавишу: Ctrl\n\n"
                 + "Горячие клавиши:\n"
                 + "Пауза/продолжить: F8\n"
                 + "Экстренный стоп: F12");
@@ -336,9 +370,9 @@ public class MainController {
     private void validateDsl() {
         try {
             dslCodec.fromDsl(dslArea.getText(), deriveMacroName());
-            status("DSL корректен");
+            status("Сценарий корректен");
         } catch (Exception ex) {
-            showError("В DSL обнаружены ошибки", ex);
+            showError("В сценарии обнаружены ошибки", ex);
         }
     }
 
@@ -347,15 +381,15 @@ public class MainController {
             currentMacro = dslCodec.fromDsl(dslArea.getText(), deriveMacroName());
             dirty = true;
             refreshAll();
-            status("DSL успешно преобразован в макрос");
+            status("Сценарий успешно преобразован в макрос");
         } catch (Exception ex) {
-            showError("Не удалось применить DSL", ex);
+            showError("Не удалось применить сценарий", ex);
         }
     }
 
     private void fillDslFromMacro() {
         dslArea.setText(dslCodec.toDsl(currentMacro));
-        status("DSL обновлен из текущего макроса");
+        status("Сценарий обновлен из текущего макроса");
     }
 
     private void refreshAll() {
@@ -419,7 +453,11 @@ public class MainController {
     }
 
     private void status(String text) {
-        statusLabel.setText(text);
+        if (Platform.isFxApplicationThread()) {
+            statusLabel.setText(text);
+        } else {
+            Platform.runLater(() -> statusLabel.setText(text));
+        }
     }
 
     private void showError(String title, Exception ex) {

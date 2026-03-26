@@ -35,14 +35,16 @@ javafx {
 application {
     mainModule.set("macrosnik")
     mainClass.set("macrosnik.app.MainApp")
+    applicationDefaultJvmArgs = listOf("-Dfile.encoding=UTF-8")
 }
 
-tasks.test {
-    useJUnitPlatform()
-}
-
-tasks.withType<JavaCompile> {
+tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+    systemProperty("file.encoding", "UTF-8")
 }
 
 
@@ -68,4 +70,3 @@ jlink {
         )
     }
 }
-

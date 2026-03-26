@@ -12,7 +12,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
         @JsonSubTypes.Type(value = DelayAction.class, name = "DELAY"),
         @JsonSubTypes.Type(value = MouseMovePathAction.class, name = "MOUSE_MOVE_PATH"),
         @JsonSubTypes.Type(value = MouseButtonAction.class, name = "MOUSE_BUTTON"),
-        @JsonSubTypes.Type(value = KeyAction.class, name = "KEY")
+        @JsonSubTypes.Type(value = KeyAction.class, name = "KEY"),
+        @JsonSubTypes.Type(value = TextInputAction.class, name = "TEXT_INPUT")
 })
 public abstract class Action {
     public long delayBeforeMs;

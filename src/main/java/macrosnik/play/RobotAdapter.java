@@ -6,4 +6,5 @@ public interface RobotAdapter {
     void mouseRelease(int buttonsMask);
     void keyPress(int keyCode);
     void keyRelease(int keyCode);
+    void inputText(String text);
 }
