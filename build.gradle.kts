@@ -1,3 +1,6 @@
+import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.bundling.Zip
+
 plugins {
     java
     application
@@ -8,9 +11,23 @@ plugins {
 group = "macrosnik"
 version = "0.1.0"
 
+val appName = "MacRosNik"
+val javaVersion = JavaLanguageVersion.of(21)
+val jpackageJavaHome = javaToolchains.launcherFor {
+    languageVersion.set(javaVersion)
+}.map { it.metadata.installationPath.asFile.absolutePath }
+val windowsInstallerType = providers.gradleProperty("windowsInstallerType").orElse("exe")
+val jpackageImageOutputDir = layout.buildDirectory.dir("app-image")
+val jpackageInstallerOutputDir = layout.buildDirectory.dir("installer")
+val jpackageImageDir = layout.buildDirectory.dir("app-image/$appName")
+val portableExeDir = layout.buildDirectory.dir("exe/$appName")
+val jnativehookJar = configurations.runtimeClasspath.map { runtimeClasspath ->
+    runtimeClasspath.files.first { it.name.startsWith("jnativehook-") && it.extension == "jar" }
+}
+
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(javaVersion)
     }
 }
 
@@ -20,7 +37,6 @@ repositories {
 
 dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2")
     implementation("com.github.kwhat:jnativehook:2.2.2")
 
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
@@ -42,6 +58,15 @@ tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
 }
 
+tasks.processResources {
+    from({
+        zipTree(jnativehookJar.get())
+    }) {
+        include("com/github/kwhat/jnativehook/lib/windows/**")
+        into("native/jnativehook")
+    }
+}
+
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     systemProperty("file.encoding", "UTF-8")
@@ -51,14 +76,18 @@ tasks.withType<Test>().configureEach {
 
 jlink {
     //moduleName.set("macrosnik")
-    imageName.set("MacRosNik")
+    options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
+    imageName.set(appName)
 
     launcher {
-        name = "MacRosNik"
+        name = appName
     }
 
     jpackage {
-        installerType = "msi"
+        jpackageHome = jpackageJavaHome.get()
+        setImageOutputDir(jpackageImageOutputDir.get().asFile)
+        setInstallerOutputDir(jpackageInstallerOutputDir.get().asFile)
+        installerType = windowsInstallerType.get()
         appVersion = project.version.toString()
         vendor = "MacrosNik"
         installerOptions = listOf(
@@ -69,4 +98,29 @@ jlink {
             "--win-shortcut"
         )
     }
+}
+
+tasks.register<Sync>("packageExe") {
+    group = "distribution"
+    description = "Builds a portable Windows app image with MacRosNik.exe."
+    dependsOn("jpackageImage")
+    from(jpackageImageDir)
+    into(portableExeDir)
+}
+
+tasks.register<Zip>("packageExeZip") {
+    group = "distribution"
+    description = "Creates a zip archive of the portable Windows app image."
+    dependsOn("packageExe")
+    archiveBaseName.set(appName)
+    archiveVersion.set(project.version.toString())
+    archiveClassifier.set("windows-portable")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    from(portableExeDir)
+}
+
+tasks.register("packageInstaller") {
+    group = "distribution"
+    description = "Builds a Windows installer (.exe by default, .msi with -PwindowsInstallerType=msi)."
+    dependsOn("jpackage")
 }

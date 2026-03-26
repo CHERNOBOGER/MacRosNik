@@ -1,14 +1,15 @@
 package macrosnik.hotkey;
 
-import macrosnik.play.MacroPlayer;
-import macrosnik.play.PlayerState;
-import macrosnik.settings.AppSettings;
 import com.github.kwhat.jnativehook.GlobalScreen;
 import com.github.kwhat.jnativehook.NativeHookException;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
+import macrosnik.play.MacroPlayer;
+import macrosnik.play.PlayerState;
 
 public class HotkeyService implements NativeKeyListener, AutoCloseable {
+    public static final int DEFAULT_PAUSE_RESUME_KEY = NativeKeyEvent.VC_F8;
+    public static final int DEFAULT_STOP_KEY = NativeKeyEvent.VC_F12;
 
     private final MacroPlayer player;
     private final int pauseResumeKey;
@@ -18,11 +19,11 @@ public class HotkeyService implements NativeKeyListener, AutoCloseable {
 
     private volatile boolean started = false;
 
-    public HotkeyService(MacroPlayer player, AppSettings settings, Runnable emergencyStop) {
+    public HotkeyService(MacroPlayer player, int pauseResumeKey, int stopKey, Runnable emergencyStop) {
         this.player = player;
         this.emergencyStop = emergencyStop;
-        this.pauseResumeKey = (settings.pauseResumeKey != 0) ? settings.pauseResumeKey : NativeKeyEvent.VC_F8;
-        this.stopKey = (settings.stopKey != 0) ? settings.stopKey : NativeKeyEvent.VC_F12;
+        this.pauseResumeKey = pauseResumeKey;
+        this.stopKey = stopKey;
     }
 
 
@@ -36,7 +37,7 @@ public class HotkeyService implements NativeKeyListener, AutoCloseable {
             started = true;
             System.out.println("Native hook registered OK");
         } catch (NativeHookException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Не удалось зарегистрировать глобальный перехват клавиатуры", e);
         }
     }
 

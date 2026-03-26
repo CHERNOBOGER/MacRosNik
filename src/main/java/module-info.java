@@ -6,12 +6,11 @@ module macrosnik {
     requires com.github.kwhat.jnativehook;
 
     requires com.fasterxml.jackson.databind;
-    requires com.fasterxml.jackson.datatype.jsr310;
 
     exports macrosnik.app;
+    exports macrosnik.hotkey;
 
     opens macrosnik.domain to com.fasterxml.jackson.databind;
     opens macrosnik.domain.enums to com.fasterxml.jackson.databind;
-    opens macrosnik.settings to com.fasterxml.jackson.databind;
     opens macrosnik.storage to com.fasterxml.jackson.databind;
 }

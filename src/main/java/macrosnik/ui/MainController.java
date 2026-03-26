@@ -1,6 +1,5 @@
 package macrosnik.ui;
 
-import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -23,8 +22,6 @@ import macrosnik.play.PlayerState;
 import macrosnik.process.AggregationConfig;
 import macrosnik.process.EventAggregator;
 import macrosnik.record.RecorderService;
-import macrosnik.settings.AppSettings;
-import macrosnik.settings.SettingsStorage;
 import macrosnik.storage.MacroStorage;
 
 import java.nio.file.Path;
@@ -42,10 +39,13 @@ public class MainController {
 
     private final MacroStorage storage = new MacroStorage();
     private final MacroPlayer player = new MacroPlayer();
-    private final SettingsStorage settingsStorage = new SettingsStorage(Path.of("macros/settings.json"));
-    private final AppSettings settings = settingsStorage.loadOrDefault();
     private final RecorderService recorder = new RecorderService();
-    private final HotkeyService hotkeys = new HotkeyService(player, settings, this::emergencyStop);
+    private final HotkeyService hotkeys = new HotkeyService(
+            player,
+            HotkeyService.DEFAULT_PAUSE_RESUME_KEY,
+            HotkeyService.DEFAULT_STOP_KEY,
+            this::emergencyStop
+    );
     private final MacroDslCodec dslCodec = new MacroDslCodec();
 
     private Macro currentMacro = new Macro("Новый макрос");
@@ -70,7 +70,12 @@ public class MainController {
     }
 
     public void startHotkeys() {
-        hotkeys.start();
+        try {
+            hotkeys.start();
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+            status("Горячие клавиши не запущены: " + readableMessage(ex));
+        }
     }
 
     public void shutdown() {
@@ -447,9 +452,7 @@ public class MainController {
     }
 
     private Set<Integer> resolveIgnoredKeys() {
-        int pauseKey = settings.pauseResumeKey != 0 ? settings.pauseResumeKey : NativeKeyEvent.VC_F8;
-        int stopKey = settings.stopKey != 0 ? settings.stopKey : NativeKeyEvent.VC_F12;
-        return Set.of(pauseKey, stopKey);
+        return Set.of(HotkeyService.DEFAULT_PAUSE_RESUME_KEY, HotkeyService.DEFAULT_STOP_KEY);
     }
 
     private void status(String text) {
@@ -458,6 +461,15 @@ public class MainController {
         } else {
             Platform.runLater(() -> statusLabel.setText(text));
         }
+    }
+
+    private String readableMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return (message == null || message.isBlank()) ? current.getClass().getSimpleName() : message;
     }
 
     private void showError(String title, Exception ex) {
