@@ -1,5 +1,6 @@
 import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.Zip
+import org.gradle.api.GradleException
 import java.io.ByteArrayOutputStream
 
 data class GitVersionInfo(
@@ -93,10 +94,13 @@ val jpackageJavaHome = javaToolchains.launcherFor {
 }.map { it.metadata.installationPath.asFile.absolutePath }
 val windowsIconFile = layout.projectDirectory.file("src/main/resources/icons/app.ico").asFile
 val windowsInstallerType = providers.gradleProperty("windowsInstallerType").orElse("exe")
+val installerFileExtension = windowsInstallerType.map { it.lowercase() }
 val jpackageImageOutputDir = layout.buildDirectory.dir("app-image")
 val jpackageInstallerOutputDir = layout.buildDirectory.dir("installer")
 val jpackageImageDir = layout.buildDirectory.dir("app-image/$appName")
 val portableExeDir = layout.buildDirectory.dir("exe/$appName")
+val releaseAssetsDir = layout.buildDirectory.dir("release-assets")
+val releaseInstallerFileName = installerFileExtension.map { "$appName-Setup.$it" }
 val jnativehookJar = configurations.runtimeClasspath.map { runtimeClasspath ->
     runtimeClasspath.files.first { it.name.startsWith("jnativehook-") && it.extension == "jar" }
 }
@@ -192,9 +196,7 @@ tasks.register<Zip>("packageExeZip") {
     group = "distribution"
     description = "Creates a zip archive of the portable Windows app image."
     dependsOn("packageExe")
-    archiveBaseName.set(appName)
-    archiveVersion.set(project.version.toString())
-    archiveClassifier.set("windows-portable")
+    archiveFileName.set("$appName.zip")
     destinationDirectory.set(layout.buildDirectory.dir("distributions"))
     from(portableExeDir)
 }
@@ -203,6 +205,37 @@ tasks.register("packageInstaller") {
     group = "distribution"
     description = "Builds a Windows installer (.exe by default, .msi with -PwindowsInstallerType=msi)."
     dependsOn("jpackage")
+}
+
+tasks.register("prepareReleaseAssets") {
+    group = "distribution"
+    description = "Collects versionless files for GitHub Releases."
+    dependsOn("packageExeZip", "packageInstaller")
+    doLast {
+        val outputDir = releaseAssetsDir.get().asFile
+        delete(outputDir)
+        outputDir.mkdirs()
+
+        copy {
+            from(tasks.named<Zip>("packageExeZip").flatMap { it.archiveFile })
+            into(outputDir)
+        }
+
+        val installerFile = jpackageInstallerOutputDir.get().asFile
+            .listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.extension.equals(installerFileExtension.get(), ignoreCase = true) }
+            ?.maxByOrNull { it.lastModified() }
+            ?: throw GradleException(
+                "No installer file with extension .${installerFileExtension.get()} found in ${jpackageInstallerOutputDir.get().asFile}."
+            )
+
+        copy {
+            from(installerFile)
+            into(outputDir)
+            rename { releaseInstallerFileName.get() }
+        }
+    }
 }
 
 tasks.register("printVersion") {

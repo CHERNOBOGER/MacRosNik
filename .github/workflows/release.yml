@@ -41,7 +41,7 @@ jobs:
 
       - name: Build release artifacts
         shell: pwsh
-        run: .\gradlew.bat --no-daemon test packageExeZip packageInstaller
+        run: .\gradlew.bat --no-daemon test prepareReleaseAssets
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -50,5 +50,4 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            build/distributions/*.zip
-            build/installer/*
+            build/release-assets/*
