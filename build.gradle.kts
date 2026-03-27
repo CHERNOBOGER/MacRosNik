@@ -9,13 +9,14 @@ plugins {
 }
 
 group = "macrosnik"
-version = "0.1.0"
+version = "1.0.0"
 
 val appName = "MacRosNik"
 val javaVersion = JavaLanguageVersion.of(21)
 val jpackageJavaHome = javaToolchains.launcherFor {
     languageVersion.set(javaVersion)
 }.map { it.metadata.installationPath.asFile.absolutePath }
+val windowsIconFile = layout.projectDirectory.file("src/main/resources/icons/app.ico").asFile
 val windowsInstallerType = providers.gradleProperty("windowsInstallerType").orElse("exe")
 val jpackageImageOutputDir = layout.buildDirectory.dir("app-image")
 val jpackageInstallerOutputDir = layout.buildDirectory.dir("installer")
@@ -90,6 +91,9 @@ jlink {
         installerType = windowsInstallerType.get()
         appVersion = project.version.toString()
         vendor = "MacrosNik"
+        if (windowsIconFile.exists()) {
+            icon = windowsIconFile.absolutePath
+        }
         installerOptions = listOf(
             "--win-upgrade-uuid", "a94a57ec-4c96-4b95-8b92-dd012041f832",
             "--win-per-user-install",
@@ -104,6 +108,7 @@ tasks.register<Sync>("packageExe") {
     group = "distribution"
     description = "Builds a portable Windows app image with MacRosNik.exe."
     dependsOn("jpackageImage")
+    mustRunAfter("jpackage")
     from(jpackageImageDir)
     into(portableExeDir)
 }

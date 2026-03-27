@@ -2,11 +2,15 @@ package macrosnik.app;
 
 import javafx.application.Application;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.stage.Stage;
-import macrosnik.ui.MainController;
 import macrosnik.hotkey.PackagedJNativeHookLibraryLocator;
+import macrosnik.ui.MainController;
+
+import java.io.InputStream;
 
 public class MainApp extends Application {
+    private static final String APP_ICON_RESOURCE = "/icons/app.png";
 
     @Override
     public void start(Stage stage) {
@@ -15,6 +19,7 @@ public class MainApp extends Application {
         Scene scene = new Scene(controller.root(), 1234, 666);
         stage.setTitle("MacRosNik");
         stage.setScene(scene);
+        applyWindowIcon(stage);
         stage.setOnCloseRequest(e -> controller.shutdown());
         stage.show();
 
@@ -26,5 +31,14 @@ public class MainApp extends Application {
             System.setProperty("jnativehook.lib.locator", PackagedJNativeHookLibraryLocator.class.getName());
         }
         launch(args);
+    }
+
+    private void applyWindowIcon(Stage stage) {
+        try (InputStream inputStream = MainApp.class.getResourceAsStream(APP_ICON_RESOURCE)) {
+            if (inputStream != null) {
+                stage.getIcons().add(new Image(inputStream));
+            }
+        } catch (Exception ignored) {
+        }
     }
 }
