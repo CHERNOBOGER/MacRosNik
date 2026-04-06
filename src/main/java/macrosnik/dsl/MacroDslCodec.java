@@ -240,7 +240,11 @@ public class MacroDslCodec {
     }
 
     private String formatKeyCommand(KeyAction keyAction) {
-        String prefix = keyAction.action == KeyActionType.DOWN ? "Зажать клавишу: " : "Отпустить клавишу: ";
+        String prefix = switch (keyAction.action) {
+            case DOWN -> "Зажать клавишу: ";
+            case UP -> "Отпустить клавишу: ";
+            case CLICK -> "Нажать клавишу: ";
+        };
         return prefix + formatKeyName(keyAction.keyCode);
     }
 

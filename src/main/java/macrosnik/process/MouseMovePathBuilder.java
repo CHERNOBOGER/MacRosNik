@@ -46,14 +46,16 @@ class MouseMovePathBuilder {
     }
 
     MouseMovePathAction buildAndReset() {
-        if (points.size() < 2) {
+        if (points.isEmpty()) {
             reset();
             return null;
         }
 
         MouseMovePathAction action = new MouseMovePathAction();
-        action.delayBeforeMs = points.get(0).dtMs;
-        action.points.addAll(points);
+        action.delayBeforeMs = totalPathDurationMs();
+
+        PathPoint lastPoint = points.getLast();
+        action.points.add(new PathPoint(lastPoint.x, lastPoint.y, 0));
 
         reset();
         return action;
@@ -72,5 +74,13 @@ class MouseMovePathBuilder {
         lastX = null;
         lastY = null;
         lastAcceptedTimeMs = 0;
+    }
+
+    private long totalPathDurationMs() {
+        long total = 0;
+        for (PathPoint point : points) {
+            total += point.dtMs;
+        }
+        return total;
     }
 }

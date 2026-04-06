@@ -83,10 +83,14 @@ public class ActionExecutor {
         player.checkpoint();
         validateKeyCode(action.keyCode);
 
-        if (action.action == KeyActionType.DOWN) {
-            robot.keyPress(action.keyCode);
-        } else {
-            robot.keyRelease(action.keyCode);
+        switch (action.action) {
+            case DOWN -> robot.keyPress(action.keyCode);
+            case UP -> robot.keyRelease(action.keyCode);
+            case CLICK -> {
+                robot.keyPress(action.keyCode);
+                sleepInterruptible(30, player);
+                robot.keyRelease(action.keyCode);
+            }
         }
     }
 

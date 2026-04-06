@@ -2,6 +2,7 @@ package macrosnik.play;
 
 import macrosnik.domain.KeyAction;
 import macrosnik.domain.MouseButtonAction;
+import macrosnik.domain.MouseMovePathAction;
 import macrosnik.domain.TextInputAction;
 import macrosnik.domain.enums.KeyActionType;
 import macrosnik.domain.enums.MouseButton;
@@ -22,11 +23,25 @@ class ActionExecutorTest {
         FakeRobot robot = new FakeRobot();
 
         executor.execute(new MouseButtonAction(0, MouseButton.LEFT, MouseButtonActionType.CLICK), robot, player);
+        executor.execute(new KeyAction(0, 66, KeyActionType.CLICK), robot, player);
         executor.execute(new KeyAction(0, 65, KeyActionType.DOWN), robot, player);
         executor.execute(new KeyAction(0, 65, KeyActionType.UP), robot, player);
         executor.execute(new TextInputAction(0, "Привет"), robot, player);
 
-        assertEquals(List.of("mousePress:1024", "mouseRelease:1024", "keyPress:65", "keyRelease:65", "inputText:Привет"), robot.calls);
+        assertEquals(List.of("mousePress:1024", "mouseRelease:1024", "keyPress:66", "keyRelease:66", "keyPress:65", "keyRelease:65", "inputText:Привет"), robot.calls);
+    }
+
+    @Test
+    void executesSinglePointMouseMove() throws Exception {
+        ActionExecutor executor = new ActionExecutor();
+        MacroPlayer player = new MacroPlayer();
+        FakeRobot robot = new FakeRobot();
+        MouseMovePathAction move = new MouseMovePathAction(0);
+        move.points.add(new MouseMovePathAction.PathPoint(320, 240, 0));
+
+        executor.execute(move, robot, player);
+
+        assertEquals(List.of("mouseMove:320,240"), robot.calls);
     }
 
     private static class FakeRobot implements RobotAdapter {

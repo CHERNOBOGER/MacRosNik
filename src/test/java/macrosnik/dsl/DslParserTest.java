@@ -42,7 +42,7 @@ class DslParserTest {
                 Нажать клавишу: Ввод
                 """, "Тест");
 
-        assertEquals(5, macro.actions.size());
+        assertEquals(4, macro.actions.size());
 
         DelayAction delayAction = assertInstanceOf(DelayAction.class, macro.actions.get(0));
         assertEquals(300_000, delayAction.durationMs);
@@ -54,10 +54,8 @@ class DslParserTest {
         MouseButtonAction mouseButtonAction = assertInstanceOf(MouseButtonAction.class, macro.actions.get(2));
         assertEquals(MouseButtonActionType.CLICK, mouseButtonAction.action);
 
-        KeyAction keyDown = assertInstanceOf(KeyAction.class, macro.actions.get(3));
-        KeyAction keyUp = assertInstanceOf(KeyAction.class, macro.actions.get(4));
-        assertEquals(KeyActionType.DOWN, keyDown.action);
-        assertEquals(KeyActionType.UP, keyUp.action);
+        KeyAction keyClick = assertInstanceOf(KeyAction.class, macro.actions.get(3));
+        assertEquals(KeyActionType.CLICK, keyClick.action);
     }
 
     @Test
@@ -86,6 +84,70 @@ class DslParserTest {
     }
 
     @Test
+    void parsesStructuredAttributesSeparatelyFromVerb() {
+        Macro macro = parser.parse("""
+                Нажать клавишу Enter:
+                Зажать клавишу: Ctrl
+                Отпустить клавишу Ctrl:
+                """, "Тест");
+
+        assertEquals(3, macro.actions.size());
+
+        KeyAction enterClick = assertInstanceOf(KeyAction.class, macro.actions.get(0));
+        assertEquals(KeyEvent.VK_ENTER, enterClick.keyCode);
+        assertEquals(KeyActionType.CLICK, enterClick.action);
+
+        KeyAction ctrlDown = assertInstanceOf(KeyAction.class, macro.actions.get(1));
+        assertEquals(KeyEvent.VK_CONTROL, ctrlDown.keyCode);
+        assertEquals(KeyActionType.DOWN, ctrlDown.action);
+
+        KeyAction ctrlUp = assertInstanceOf(KeyAction.class, macro.actions.get(2));
+        assertEquals(KeyEvent.VK_CONTROL, ctrlUp.keyCode);
+        assertEquals(KeyActionType.UP, ctrlUp.action);
+    }
+
+    @Test
+    void parsesInlineKeyComboDeclaredByAttributeWord() {
+        Macro macro = parser.parse("Нажать клавиши Alt+Tab:", "Тест");
+
+        assertEquals(4, macro.actions.size());
+        assertEquals(KeyEvent.VK_ALT, ((KeyAction) macro.actions.get(0)).keyCode);
+        assertEquals(KeyEvent.VK_TAB, ((KeyAction) macro.actions.get(1)).keyCode);
+        assertEquals(KeyActionType.DOWN, ((KeyAction) macro.actions.get(0)).action);
+        assertEquals(KeyActionType.DOWN, ((KeyAction) macro.actions.get(1)).action);
+        assertEquals(KeyActionType.UP, ((KeyAction) macro.actions.get(2)).action);
+        assertEquals(KeyActionType.UP, ((KeyAction) macro.actions.get(3)).action);
+    }
+
+    @Test
+    void treatsCyrillicLettersAsSamePhysicalKeysAsLatin() {
+        Macro macro = parser.parse("""
+                Нажать клавишу: а
+                Нажать клавишу: f
+                Нажать клавишу: ф
+                Нажать клавишу: a
+                Нажать сочетание: Ctrl+Й
+                """, "Тест");
+
+        assertEquals(8, macro.actions.size());
+
+        KeyAction russianA = assertInstanceOf(KeyAction.class, macro.actions.get(0));
+        KeyAction latinF = assertInstanceOf(KeyAction.class, macro.actions.get(1));
+        KeyAction russianEf = assertInstanceOf(KeyAction.class, macro.actions.get(2));
+        KeyAction latinA = assertInstanceOf(KeyAction.class, macro.actions.get(3));
+
+        assertEquals(KeyEvent.VK_F, russianA.keyCode);
+        assertEquals(KeyEvent.VK_F, latinF.keyCode);
+        assertEquals(KeyEvent.VK_A, russianEf.keyCode);
+        assertEquals(KeyEvent.VK_A, latinA.keyCode);
+
+        KeyAction ctrlDown = assertInstanceOf(KeyAction.class, macro.actions.get(4));
+        KeyAction qDown = assertInstanceOf(KeyAction.class, macro.actions.get(5));
+        assertEquals(KeyEvent.VK_CONTROL, ctrlDown.keyCode);
+        assertEquals(KeyEvent.VK_Q, qDown.keyCode);
+    }
+
+    @Test
     void parsesMousePathCommand() {
         Macro macro = parser.parse("Провести мышью: 10 20 -> 110 220 120 мс", "Тест");
 
@@ -105,9 +167,9 @@ class DslParserTest {
     void supportsKeyShortcutWithEmptyDataSection() {
         Macro macro = parser.parse("Нажать ввод:", "Тест");
 
-        assertEquals(2, macro.actions.size());
+        assertEquals(1, macro.actions.size());
         assertInstanceOf(KeyAction.class, macro.actions.get(0));
-        assertInstanceOf(KeyAction.class, macro.actions.get(1));
+        assertEquals(KeyActionType.CLICK, ((KeyAction) macro.actions.get(0)).action);
     }
 
     @Test

@@ -16,7 +16,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EventAggregatorTest {
     private final EventAggregator aggregator = new EventAggregator(new AggregationConfig());
@@ -29,7 +31,7 @@ class EventAggregatorTest {
     }
 
     @Test
-    void aggregateBuildsMousePathAndFlushesItBeforeKeyboardEvent() {
+    void aggregateBuildsSingleTargetPointAndFlushesItBeforeKeyboardEvent() {
         List<RawEvent> rawEvents = List.of(
                 new RawMouseMove(10, 10, 1_000_000),
                 new RawMouseMove(18, 14, 21_000_000),
@@ -42,8 +44,11 @@ class EventAggregatorTest {
         assertInstanceOf(KeyAction.class, macro.actions.get(1));
 
         MouseMovePathAction path = (MouseMovePathAction) macro.actions.get(0);
-        assertEquals(2, path.points.size());
-        assertEquals(20, path.points.get(1).dtMs);
+        assertEquals(20, path.delayBeforeMs);
+        assertEquals(1, path.points.size());
+        assertEquals(18, path.points.getFirst().x);
+        assertEquals(14, path.points.getFirst().y);
+        assertEquals(0, path.points.getFirst().dtMs);
 
         KeyAction keyAction = (KeyAction) macro.actions.get(1);
         assertEquals(20, keyAction.delayBeforeMs);
@@ -62,6 +67,13 @@ class EventAggregatorTest {
 
         Macro macro = aggregator.aggregate(rawEvents);
         assertEquals(3, macro.actions.size());
+
+        MouseMovePathAction path = assertInstanceOf(MouseMovePathAction.class, macro.actions.get(0));
+        assertEquals(20, path.delayBeforeMs);
+        assertEquals(1, path.points.size());
+        assertEquals(10, path.points.getFirst().x);
+        assertEquals(10, path.points.getFirst().y);
+
         MouseButtonAction middleDown = (MouseButtonAction) macro.actions.get(1);
         MouseButtonAction rightUp = (MouseButtonAction) macro.actions.get(2);
         assertEquals(MouseButton.MIDDLE, middleDown.button);
@@ -86,5 +98,60 @@ class EventAggregatorTest {
         KeyAction keyUp = assertInstanceOf(KeyAction.class, macro.actions.get(1));
         assertEquals(KeyActionType.DOWN, keyDown.action);
         assertEquals(KeyActionType.UP, keyUp.action);
+    }
+
+    @Test
+    void aggregateCollapsesPlainKeyPressIntoSingleClickAction() {
+        List<RawEvent> rawEvents = List.of(
+                new RawKey(21, true, 1_000_000),
+                new RawKey(21, false, 86_000_000)
+        );
+
+        Macro macro = aggregator.aggregate(rawEvents);
+        assertEquals(1, macro.actions.size());
+
+        KeyAction keyClick = assertInstanceOf(KeyAction.class, macro.actions.get(0));
+        assertEquals(KeyActionType.CLICK, keyClick.action);
+        assertEquals(0, keyClick.delayBeforeMs);
+    }
+
+    @Test
+    void aggregateCollapsesPlainMouseClickIntoSingleAction() {
+        List<RawEvent> rawEvents = List.of(
+                new RawMouseButton(1, true, 100, 200, 1_000_000),
+                new RawMouseButton(1, false, 100, 200, 31_000_000)
+        );
+
+        Macro macro = aggregator.aggregate(rawEvents);
+        assertEquals(1, macro.actions.size());
+
+        MouseButtonAction click = assertInstanceOf(MouseButtonAction.class, macro.actions.get(0));
+        assertEquals(MouseButton.LEFT, click.button);
+        assertEquals(MouseButtonActionType.CLICK, click.action);
+        assertEquals(0, click.delayBeforeMs);
+    }
+
+    @Test
+    void aggregateKeepsMouseDownAndUpSeparateWhenSomethingHappensBetweenThem() {
+        List<RawEvent> rawEvents = List.of(
+                new RawMouseButton(1, true, 10, 10, 1_000_000),
+                new RawMouseMove(20, 20, 11_000_000),
+                new RawMouseMove(40, 40, 21_000_000),
+                new RawMouseButton(1, false, 40, 40, 31_000_000)
+        );
+
+        Macro macro = aggregator.aggregate(rawEvents);
+        assertEquals(3, macro.actions.size());
+
+        MouseButtonAction down = assertInstanceOf(MouseButtonAction.class, macro.actions.get(0));
+        MouseMovePathAction move = assertInstanceOf(MouseMovePathAction.class, macro.actions.get(1));
+        MouseButtonAction up = assertInstanceOf(MouseButtonAction.class, macro.actions.get(2));
+
+        assertEquals(MouseButtonActionType.DOWN, down.action);
+        assertEquals(20, move.delayBeforeMs);
+        assertEquals(40, move.points.getFirst().x);
+        assertEquals(40, move.points.getFirst().y);
+        assertEquals(MouseButtonActionType.UP, up.action);
+        assertEquals(10, up.delayBeforeMs);
     }
 }

@@ -9,6 +9,7 @@ import macrosnik.domain.TextInputAction;
 import macrosnik.domain.enums.KeyActionType;
 import macrosnik.domain.enums.MouseButton;
 import macrosnik.domain.enums.MouseButtonActionType;
+import macrosnik.dsl.StructuredDslCommand.DelayUnit;
 
 import java.awt.event.KeyEvent;
 import java.lang.reflect.Field;
@@ -24,6 +25,7 @@ public class DslParser {
     private static final Pattern MOUSE_PATH_PATTERN = Pattern.compile(
             "^(-?\\d+)\\s+(-?\\d+)\\s*->\\s*(-?\\d+)\\s+(-?\\d+)(?:\\s+(.+))?$"
     );
+    private final StructuredCommandResolver structuredCommandResolver = new StructuredCommandResolver();
 
     public Macro parse(String text, String macroName) {
         Macro macro = new Macro(macroName == null || macroName.isBlank() ? "Макрос из сценария" : macroName.trim());
@@ -58,47 +60,25 @@ public class DslParser {
 
     private void parseStructuredLine(String line, Macro macro) {
         int colonIndex = line.indexOf(':');
-        String head = normalizePhrase(line.substring(0, colonIndex));
-        String data = line.substring(colonIndex + 1).trim();
+        StructuredDslCommand command = structuredCommandResolver.resolve(
+                line.substring(0, colonIndex),
+                line.substring(colonIndex + 1).trim()
+        );
 
-        if (head.isEmpty()) {
-            throw new DslFormatException("пустая команда");
+        switch (command) {
+            case StructuredDslCommand.WaitCommand waitCommand -> parseWaitCommand(waitCommand, macro);
+            case StructuredDslCommand.TextCommand textCommand -> parseTextCommand(textCommand, macro);
+            case StructuredDslCommand.MouseMoveCommand moveCommand -> parseMouseMoveCommand(moveCommand, macro);
+            case StructuredDslCommand.MousePathCommand pathCommand -> parseMousePathCommand(pathCommand, macro);
+            case StructuredDslCommand.MouseButtonCommand mouseButtonCommand -> parseMouseButtonCommand(mouseButtonCommand, macro);
+            case StructuredDslCommand.KeyCommand keyCommand -> parseKeyCommand(keyCommand, macro);
+            case StructuredDslCommand.KeyComboCommand keyComboCommand -> parseKeyComboCommand(keyComboCommand, macro);
         }
-
-        if (parseWaitCommand(head, data, macro)) {
-            return;
-        }
-
-        if (parseMouseMoveCommand(head, data, macro)) {
-            return;
-        }
-
-        if (parseMousePathCommand(head, data, macro)) {
-            return;
-        }
-
-        if (parseTextCommand(head, data, macro)) {
-            return;
-        }
-
-        if (parseKeyComboCommand(head, data, macro)) {
-            return;
-        }
-
-        if (parseMouseButtonCommand(head, data, macro)) {
-            return;
-        }
-
-        if (parseKeyCommand(head, data, macro)) {
-            return;
-        }
-
-        throw new DslFormatException("неизвестная команда: " + line.substring(0, colonIndex).trim());
     }
 
     private void parseLegacyLine(String line, Macro macro) {
         String[] tokens = line.split("\\s+");
-        String first = normalize(tokens[0]);
+        String first = DslLexicon.normalize(tokens[0]);
 
         if (first.equals("ждать") || first.equals("пауза")) {
             requireLength(tokens, 2, line);
@@ -125,31 +105,13 @@ public class DslParser {
         throw new DslFormatException("неизвестная команда: " + tokens[0]);
     }
 
-    private boolean parseTextCommand(String head, String data, Macro macro) {
-        boolean knownCommand = switch (head) {
-            case "ввести", "ввести текст", "набрать текст", "печатать текст" -> true;
-            default -> false;
-        };
-        if (!knownCommand) {
-            return false;
-        }
-
-        requireData(data, head);
-        macro.actions.add(new TextInputAction(0, parseTextValue(data)));
-        return true;
+    private void parseTextCommand(StructuredDslCommand.TextCommand command, Macro macro) {
+        requireData(command.data(), command.normalizedHead());
+        macro.actions.add(new TextInputAction(0, parseTextValue(command.data())));
     }
 
-    private boolean parseKeyComboCommand(String head, String data, Macro macro) {
-        boolean knownCommand = switch (head) {
-            case "нажать сочетание", "нажать комбинацию", "нажать клавиши" -> true;
-            default -> false;
-        };
-        if (!knownCommand) {
-            return false;
-        }
-
-        requireData(data, head);
-        List<Integer> keyCodes = parseKeySequence(data);
+    private void parseKeyComboCommand(StructuredDslCommand.KeyComboCommand command, Macro macro) {
+        List<Integer> keyCodes = parseKeySequence(command.comboText());
         if (keyCodes.size() < 2) {
             throw new DslFormatException("в сочетании должно быть хотя бы две клавиши");
         }
@@ -160,51 +122,22 @@ public class DslParser {
         for (int i = keyCodes.size() - 1; i >= 0; i--) {
             macro.actions.add(new KeyAction(0, keyCodes.get(i), KeyActionType.UP));
         }
-        return true;
     }
 
-    private boolean parseWaitCommand(String head, String data, Macro macro) {
-        DelayUnit defaultUnit = switch (head) {
-            case "подождать", "ждать", "пауза", "подождать мс", "ждать мс" -> DelayUnit.MILLISECONDS;
-            case "подождать секунды", "подождать секунд", "подождать сек", "ждать секунды", "ждать секунд", "ждать сек" -> DelayUnit.SECONDS;
-            case "подождать минуты", "подождать минут", "подождать мин", "ждать минуты", "ждать минут", "ждать мин" -> DelayUnit.MINUTES;
-            default -> null;
-        };
-        if (defaultUnit == null) {
-            return false;
-        }
-
-        requireData(data, head);
-        macro.actions.add(new DelayAction(0, parseDurationMs(data, defaultUnit)));
-        return true;
+    private void parseWaitCommand(StructuredDslCommand.WaitCommand command, Macro macro) {
+        requireData(command.data(), command.normalizedHead());
+        macro.actions.add(new DelayAction(0, parseDurationMs(command.data(), command.defaultUnit())));
     }
 
-    private boolean parseMouseMoveCommand(String head, String data, Macro macro) {
-        boolean knownCommand = switch (head) {
-            case "переместить мышь", "двигать мышь", "мышь", "мышь двигать", "мышь переместить" -> true;
-            default -> false;
-        };
-        if (!knownCommand) {
-            return false;
-        }
-
-        requireData(data, head);
-        int[] coordinates = parseCoordinates(data);
+    private void parseMouseMoveCommand(StructuredDslCommand.MouseMoveCommand command, Macro macro) {
+        requireData(command.data(), command.normalizedHead());
+        int[] coordinates = parseCoordinates(command.data());
         macro.actions.add(mouseMoveAction(coordinates[0], coordinates[1]));
-        return true;
     }
 
-    private boolean parseMousePathCommand(String head, String data, Macro macro) {
-        boolean knownCommand = switch (head) {
-            case "провести мышью", "путь мыши", "путь мышкой" -> true;
-            default -> false;
-        };
-        if (!knownCommand) {
-            return false;
-        }
-
-        requireData(data, head);
-        Matcher matcher = MOUSE_PATH_PATTERN.matcher(data.trim());
+    private void parseMousePathCommand(StructuredDslCommand.MousePathCommand command, Macro macro) {
+        requireData(command.data(), command.normalizedHead());
+        Matcher matcher = MOUSE_PATH_PATTERN.matcher(command.data().trim());
         if (!matcher.matches()) {
             throw new DslFormatException("ожидался путь вида: x1 y1 -> x2 y2 300 мс");
         }
@@ -218,71 +151,24 @@ public class DslParser {
                 : parseDurationMs(matcher.group(5), DelayUnit.MILLISECONDS);
 
         macro.actions.add(createLinearMousePath(startX, startY, endX, endY, durationMs));
-        return true;
     }
 
-    private boolean parseMouseButtonCommand(String head, String data, Macro macro) {
-        StructuredVerb verb = resolveVerb(head);
-        if (verb == null) {
-            return false;
-        }
-
-        String target = stripVerb(head, verb.commandWord);
-        MouseButton button = tryParseMouseButtonPhrase(target);
-        if (button == null) {
-            return false;
-        }
-
-        if (!data.isBlank()) {
-            int[] coordinates = parseCoordinates(data);
+    private void parseMouseButtonCommand(StructuredDslCommand.MouseButtonCommand command, Macro macro) {
+        if (!command.data().isBlank()) {
+            int[] coordinates = parseCoordinates(command.data());
             macro.actions.add(mouseMoveAction(coordinates[0], coordinates[1]));
         }
-        macro.actions.add(new MouseButtonAction(0, button, verb.mouseActionType));
-        return true;
+        macro.actions.add(new MouseButtonAction(0, command.button(), command.actionType()));
     }
 
-    private boolean parseKeyCommand(String head, String data, Macro macro) {
-        StructuredVerb verb = resolveVerb(head);
-        if (verb == null) {
-            return false;
-        }
-
-        String target = stripVerb(head, verb.commandWord);
-        if (target.equals("клавиша") || target.equals("клавишу")) {
-            target = "";
-        } else if (target.startsWith("клавиша ")) {
-            target = target.substring("клавиша ".length()).trim();
-        } else if (target.startsWith("клавишу ")) {
-            target = target.substring("клавишу ".length()).trim();
-        }
-
-        String keyToken;
-        if (!data.isBlank()) {
-            if (!target.isBlank()) {
-                throw new DslFormatException("лишние аргументы в команде: " + head + ": " + data);
-            }
-            keyToken = data;
-        } else {
-            keyToken = target;
-        }
-
-        if (keyToken.isBlank()) {
-            return false;
-        }
-
-        int keyCode = parseKeyCode(keyToken);
-        if (verb.keyActionType == null) {
-            macro.actions.add(new KeyAction(0, keyCode, KeyActionType.DOWN));
-            macro.actions.add(new KeyAction(0, keyCode, KeyActionType.UP));
-        } else {
-            macro.actions.add(new KeyAction(0, keyCode, verb.keyActionType));
-        }
-        return true;
+    private void parseKeyCommand(StructuredDslCommand.KeyCommand command, Macro macro) {
+        int keyCode = parseKeyCode(command.keyToken());
+        macro.actions.add(new KeyAction(0, keyCode, command.actionType()));
     }
 
     private void parseLegacyMouse(String[] tokens, Macro macro, String line) {
         requireLength(tokens, 3, line);
-        String second = normalize(tokens[1]);
+        String second = DslLexicon.normalize(tokens[1]);
 
         if (second.equals("двигать") || second.equals("переместить")) {
             requireLength(tokens, 4, line);
@@ -300,11 +186,10 @@ public class DslParser {
     private void parseLegacyKey(String[] tokens, Macro macro, String line) {
         requireLength(tokens, 3, line);
         int keyCode = parseKeyCode(tokens[1]);
-        String actionToken = normalize(tokens[2]);
+        String actionToken = DslLexicon.normalize(tokens[2]);
 
         if (actionToken.equals("нажать") || actionToken.equals("клик")) {
-            macro.actions.add(new KeyAction(0, keyCode, KeyActionType.DOWN));
-            macro.actions.add(new KeyAction(0, keyCode, KeyActionType.UP));
+            macro.actions.add(new KeyAction(0, keyCode, KeyActionType.CLICK));
             return;
         }
 
@@ -370,59 +255,8 @@ public class DslParser {
         return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, value));
     }
 
-    private StructuredVerb resolveVerb(String head) {
-        if (head.equals("клик") || head.startsWith("клик ")) {
-            return new StructuredVerb("клик", MouseButtonActionType.CLICK, null);
-        }
-        if (head.equals("кликнуть") || head.startsWith("кликнуть ")) {
-            return new StructuredVerb("кликнуть", MouseButtonActionType.CLICK, null);
-        }
-        if (head.equals("нажать") || head.startsWith("нажать ")) {
-            return new StructuredVerb("нажать", MouseButtonActionType.CLICK, null);
-        }
-        if (head.equals("зажать") || head.startsWith("зажать ")) {
-            return new StructuredVerb("зажать", MouseButtonActionType.DOWN, KeyActionType.DOWN);
-        }
-        if (head.equals("отпустить") || head.startsWith("отпустить ")) {
-            return new StructuredVerb("отпустить", MouseButtonActionType.UP, KeyActionType.UP);
-        }
-        return null;
-    }
-
-    private String stripVerb(String head, String verb) {
-        String remainder = head.substring(verb.length()).trim();
-        return normalizePhrase(remainder);
-    }
-
-    private MouseButton tryParseMouseButtonPhrase(String token) {
-        if (token == null || token.isBlank()) {
-            return null;
-        }
-
-        String normalized = normalizePhrase(token);
-        if (containsAny(normalized, "лкм", "лев", "left")) {
-            return MouseButton.LEFT;
-        }
-        if (containsAny(normalized, "пкм", "прав", "right")) {
-            return MouseButton.RIGHT;
-        }
-        if (containsAny(normalized, "скм", "сред", "middle")) {
-            return MouseButton.MIDDLE;
-        }
-        return null;
-    }
-
-    private boolean containsAny(String value, String... fragments) {
-        for (String fragment : fragments) {
-            if (value.contains(fragment)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private MouseButton parseMouseButton(String token) {
-        MouseButton button = tryParseMouseButtonPhrase(token);
+        MouseButton button = DslLexicon.tryParseMouseButtonPhrase(token);
         if (button == null) {
             throw new DslFormatException("неизвестная кнопка мыши: " + token);
         }
@@ -430,7 +264,7 @@ public class DslParser {
     }
 
     private MouseButtonActionType parseMouseAction(String token) {
-        return switch (normalize(token)) {
+        return switch (DslLexicon.normalize(token)) {
             case "вниз", "down", "нажать" -> MouseButtonActionType.DOWN;
             case "вверх", "up", "отпустить" -> MouseButtonActionType.UP;
             case "клик", "click" -> MouseButtonActionType.CLICK;
@@ -439,7 +273,12 @@ public class DslParser {
     }
 
     private int parseKeyCode(String token) {
-        String normalized = normalize(token).toUpperCase(Locale.ROOT).replace(' ', '_').replace('-', '_');
+        Integer russianLayoutKeyCode = DslLexicon.tryParseRussianLayoutKeyCode(token);
+        if (russianLayoutKeyCode != null) {
+            return russianLayoutKeyCode;
+        }
+
+        String normalized = DslLexicon.normalize(token).toUpperCase(Locale.ROOT).replace(' ', '_').replace('-', '_');
         String collapsed = normalized.replace("_", "");
         if (collapsed.length() == 1) {
             return KeyEvent.getExtendedKeyCodeForChar(collapsed.charAt(0));
@@ -530,7 +369,7 @@ public class DslParser {
     }
 
     private long parseDurationMs(String token, DelayUnit defaultUnit) {
-        String value = normalizePhrase(token);
+        String value = DslLexicon.normalizePhrase(token);
         Matcher matcher = DURATION_PATTERN.matcher(value);
         if (!matcher.matches()) {
             throw new DslFormatException("некорректное время ожидания: " + token);
@@ -545,17 +384,8 @@ public class DslParser {
 
         DelayUnit unit = matcher.group(2) == null || matcher.group(2).isBlank()
                 ? defaultUnit
-                : parseDelayUnit(matcher.group(2));
+                : DslLexicon.parseDelayUnit(matcher.group(2));
         return amount * unit.multiplierMs;
-    }
-
-    private DelayUnit parseDelayUnit(String token) {
-        return switch (normalize(token)) {
-            case "мс", "ms" -> DelayUnit.MILLISECONDS;
-            case "с", "сек", "секунда", "секунды", "секунд", "sec", "second", "seconds" -> DelayUnit.SECONDS;
-            case "м", "мин", "минута", "минуты", "минут", "min", "minute", "minutes" -> DelayUnit.MINUTES;
-            default -> throw new DslFormatException("неизвестная единица времени: " + token);
-        };
     }
 
     private int[] parseCoordinates(String data) {
@@ -567,14 +397,6 @@ public class DslParser {
                 parseInt(tokens[0], "x"),
                 parseInt(tokens[1], "y")
         };
-    }
-
-    private String normalize(String token) {
-        return token.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String normalizePhrase(String token) {
-        return normalize(token).replaceAll("\\s+", " ");
     }
 
     private String stripInlineComment(String line) {
@@ -614,23 +436,6 @@ public class DslParser {
     private void requireLength(String[] tokens, int minLength, String line) {
         if (tokens.length < minLength) {
             throw new DslFormatException("недостаточно аргументов: " + line);
-        }
-    }
-
-    private record StructuredVerb(String commandWord,
-                                  MouseButtonActionType mouseActionType,
-                                  KeyActionType keyActionType) {
-    }
-
-    private enum DelayUnit {
-        MILLISECONDS(1),
-        SECONDS(1_000),
-        MINUTES(60_000);
-
-        private final long multiplierMs;
-
-        DelayUnit(long multiplierMs) {
-            this.multiplierMs = multiplierMs;
         }
     }
 }

@@ -48,6 +48,12 @@ public class MainController {
     );
     private final MacroDslCodec dslCodec = new MacroDslCodec();
 
+    private Button btnRecordRef;
+    private Button btnStopRecordRef;
+    private Button btnPlayRef;
+    private Button btnPauseRef;
+    private Button btnStopRef;
+
     private Macro currentMacro = new Macro("Новый макрос");
     private Path currentFilePath;
     private boolean dirty;
@@ -55,6 +61,7 @@ public class MainController {
     public MainController(Stage stage) {
         this.stage = stage;
         recorder.setIgnoredKeyCodes(resolveIgnoredKeys());
+        player.setStateListener(state -> Platform.runLater(this::updateControls));
 
         root.setPadding(new Insets(10));
         root.setTop(buildTopArea());
@@ -63,6 +70,7 @@ public class MainController {
 
         dslArea.setPromptText("");
         refreshAll();
+        updateControls();
     }
 
     public Parent root() {
@@ -152,6 +160,12 @@ public class MainController {
         btnFromDsl.setOnAction(e -> applyDslToMacro());
         btnToDsl.setOnAction(e -> fillDslFromMacro());
 
+        btnRecordRef = btnRecord;
+        btnStopRecordRef = btnStopRecord;
+        btnPlayRef = btnPlay;
+        btnPauseRef = btnPause;
+        btnStopRef = btnStop;
+
         return new HBox(8,
                 btnNew, btnOpen, btnSave, btnSaveAs,
                 new Separator(),
@@ -217,7 +231,6 @@ public class MainController {
                 Пример сценария:
                 Подождать мс: 500
                 Нажать ЛКМ: 400 300
-                Провести мышью: 400 300 -> 700 420 350 мс
                 Нажать клавишу: Ввод
                 Ввести текст: "Привет"
                 Нажать сочетание: Alt+Tab
@@ -243,7 +256,6 @@ public class MainController {
                 + "Примеры сценариев:\n"
                 + "Подождать мс: 500\n"
                 + "Нажать ЛКМ: 400 300\n"
-                + "Провести мышью: 400 300 -> 700 420 350 мс\n"
                 + "Нажать клавишу: Ввод\n"
                 + "Ввести текст: \"Привет\"\n"
                 + "Нажать сочетание: Alt+Tab\n"
@@ -265,6 +277,7 @@ public class MainController {
     private void startRecording() {
         try {
             recorder.start();
+            updateControls();
             status("Запись начата");
         } catch (Exception ex) {
             showError("Не удалось начать запись", ex);
@@ -281,6 +294,7 @@ public class MainController {
             currentMacro.name = deriveMacroName();
             dirty = true;
             refreshAll();
+            updateControls();
             status("Запись остановлена, макрос обновлен");
         } catch (Exception ex) {
             showError("Не удалось завершить запись", ex);
@@ -292,7 +306,12 @@ public class MainController {
             status("Нет действий для воспроизведения");
             return;
         }
+        if (recorder.isRecording()) {
+            status("Нельзя запустить макрос во время записи");
+            return;
+        }
         player.play(currentMacro);
+        updateControls();
         status("Воспроизведение запущено");
     }
 
@@ -310,6 +329,7 @@ public class MainController {
 
     private void stopPlayback() {
         player.stop();
+        updateControls();
         status("Воспроизведение остановлено");
     }
 
@@ -455,6 +475,22 @@ public class MainController {
         return Set.of(HotkeyService.DEFAULT_PAUSE_RESUME_KEY, HotkeyService.DEFAULT_STOP_KEY);
     }
 
+    private void updateControls() {
+        if (btnRecordRef == null || btnStopRecordRef == null || btnPlayRef == null || btnPauseRef == null || btnStopRef == null) {
+            return;
+        }
+        PlayerState state = player.getState();
+        boolean playing = state == PlayerState.PLAYING;
+        boolean paused = state == PlayerState.PAUSED;
+        boolean recording = recorder.isRecording();
+
+        btnPlayRef.setDisable(playing || paused || recording);
+        btnPauseRef.setDisable(!playing && !paused);
+        btnStopRef.setDisable(!playing && !paused);
+        btnRecordRef.setDisable(recording || playing || paused);
+        btnStopRecordRef.setDisable(!recording);
+    }
+
     private void status(String text) {
         if (Platform.isFxApplicationThread()) {
             statusLabel.setText(text);
@@ -489,12 +525,14 @@ public class MainController {
     public void emergencyStop() {
         try {
             player.stop();
+            updateControls();
         } catch (Exception ignored) {
         }
 
         try {
             if (recorder.isRecording()) {
                 recorder.stop();
+                updateControls();
             }
         } catch (Exception ignored) {
         }

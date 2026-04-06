@@ -4,6 +4,7 @@ import macrosnik.domain.Action;
 import macrosnik.domain.Macro;
 
 import java.awt.*;
+import java.util.function.Consumer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -20,6 +21,7 @@ public class MacroPlayer {
     private volatile boolean paused = false;
     private volatile PlayerState state = PlayerState.IDLE;
     private volatile Thread runningThread = null;
+    private volatile Consumer<PlayerState> stateListener = state -> {};
 
 
     private final ActionExecutor actionExecutor = new ActionExecutor();
@@ -28,10 +30,17 @@ public class MacroPlayer {
         return state;
     }
 
+    public void setStateListener(Consumer<PlayerState> stateListener) {
+        this.stateListener = stateListener == null ? state -> {} : stateListener;
+    }
+
     public void play(Macro macro) {
+        if (state == PlayerState.PLAYING || state == PlayerState.PAUSED) {
+            return;
+        }
         stopRequested = false;
         paused = false;
-        state = PlayerState.PLAYING;
+        setState(PlayerState.PLAYING);
 
         executor.submit(() -> {
             runningThread = Thread.currentThread();
@@ -46,12 +55,12 @@ public class MacroPlayer {
                     actionExecutor.execute(action, robot, this);
                 }
             } catch (InterruptedException ie) {
-
+                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
                 runningThread = null;
-                state = stopRequested ? PlayerState.STOPPED : PlayerState.IDLE;
+                setState(stopRequested ? PlayerState.STOPPED : PlayerState.IDLE);
             }
         });
 
@@ -59,13 +68,13 @@ public class MacroPlayer {
 
     public void pause() {
         paused = true;
-        state = PlayerState.PAUSED;
+        setState(PlayerState.PAUSED);
     }
 
     public void resume() {
         synchronized (lock) {
             paused = false;
-            state = PlayerState.PLAYING;
+            setState(PlayerState.PLAYING);
             lock.notifyAll();
         }
     }
@@ -89,7 +98,7 @@ public class MacroPlayer {
         if (t != null) {
             t.interrupt();
         }
-        state = PlayerState.STOPPED;
+        setState(PlayerState.STOPPED);
     }
 
 
@@ -98,6 +107,14 @@ public class MacroPlayer {
             while (paused && !stopRequested) {
                 lock.wait();
             }
+        }
+    }
+
+    private void setState(PlayerState next) {
+        state = next;
+        try {
+            stateListener.accept(next);
+        } catch (Exception ignored) {
         }
     }
 }

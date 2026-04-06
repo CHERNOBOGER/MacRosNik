@@ -15,7 +15,10 @@ public class MacroStorage {
     private final ObjectMapper mapper = ObjectMapperFactory.create();
 
     public void save(Path path, Macro macro) throws IOException {
-        Files.createDirectories(path.getParent());
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), macro);
     }
 
