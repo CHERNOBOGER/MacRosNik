@@ -27,12 +27,14 @@ public class HotkeyService implements NativeKeyListener, AutoCloseable {
     }
 
 
-    public void start() {
+    public synchronized void start() {
         if (started) return;
 
         try {
             System.out.println("Registering native hook...");
-            GlobalScreen.registerNativeHook();
+            if (!GlobalScreen.isNativeHookRegistered()) {
+                GlobalScreen.registerNativeHook();
+            }
             GlobalScreen.addNativeKeyListener(this);
             started = true;
             System.out.println("Native hook registered OK");
@@ -68,11 +70,13 @@ public class HotkeyService implements NativeKeyListener, AutoCloseable {
     @Override public void nativeKeyTyped(NativeKeyEvent e) { }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (!started) return;
         try {
             GlobalScreen.removeNativeKeyListener(this);
-            GlobalScreen.unregisterNativeHook();
+            if (GlobalScreen.isNativeHookRegistered()) {
+                GlobalScreen.unregisterNativeHook();
+            }
         } catch (NativeHookException ignored) {
         } finally {
             started = false;

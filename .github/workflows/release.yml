@@ -39,9 +39,73 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat --no-daemon printVersion
 
-      - name: Build release artifacts
+      - name: Verify signing secrets
         shell: pwsh
-        run: .\gradlew.bat --no-daemon test prepareReleaseAssets
+        run: |
+          if ([string]::IsNullOrWhiteSpace('${{ secrets.WINDOWS_SIGN_CERT_PFX_BASE64 }}')) {
+            throw "Missing GitHub secret WINDOWS_SIGN_CERT_PFX_BASE64. Refusing to publish an unsigned Windows release."
+          }
+          if ([string]::IsNullOrWhiteSpace('${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}')) {
+            throw "Missing GitHub secret WINDOWS_SIGN_CERT_PASSWORD. Refusing to publish an unsigned Windows release."
+          }
+
+      - name: Build release binaries
+        shell: pwsh
+        run: .\gradlew.bat --no-daemon test packageExe packageInstaller
+
+      - name: Restore signing certificate
+        shell: pwsh
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "windows-signing-cert.pfx"
+          [IO.File]::WriteAllBytes(
+            $certificatePath,
+            [Convert]::FromBase64String('${{ secrets.WINDOWS_SIGN_CERT_PFX_BASE64 }}')
+          )
+          "WINDOWS_SIGN_CERT_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Sign Windows binaries
+        shell: pwsh
+        env:
+          WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+          WINDOWS_SIGN_TIMESTAMP_URL: http://timestamp.digicert.com
+        run: |
+          $portableExe = (Resolve-Path 'build\exe\MacRosNik\MacRosNik.exe').Path
+          $appImageExe = (Resolve-Path 'build\app-image\MacRosNik\MacRosNik.exe').Path
+          $installer = Get-ChildItem -Path build\installer -File |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Installer file not found in build\installer."
+          }
+
+          .\.github\scripts\sign-windows.ps1 `
+            -CertificatePath $env:WINDOWS_SIGN_CERT_PATH `
+            -CertificatePassword $env:WINDOWS_SIGN_CERT_PASSWORD `
+            -Files @($appImageExe, $portableExe, $installer.FullName) `
+            -TimestampUrl $env:WINDOWS_SIGN_TIMESTAMP_URL
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          $outputDir = Join-Path $PWD 'build\release-assets'
+          if (Test-Path -LiteralPath $outputDir) {
+            Remove-Item -LiteralPath $outputDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $outputDir | Out-Null
+
+          $portableZip = Join-Path $outputDir 'MacRosNik.zip'
+          Compress-Archive -Path (Join-Path $PWD 'build\exe\MacRosNik\*') -DestinationPath $portableZip
+
+          $installer = Get-ChildItem -Path build\installer -File |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Installer file not found in build\installer."
+          }
+
+          Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $outputDir ("MacRosNik-Setup" + $installer.Extension))
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

@@ -40,6 +40,8 @@ public class MainController {
     private final MacroStorage storage = new MacroStorage();
     private final MacroPlayer player = new MacroPlayer();
     private final RecorderService recorder = new RecorderService();
+    private final SettingsWindow settingsWindow;
+    private final InspectorWindow inspectorWindow;
     private final HotkeyService hotkeys = new HotkeyService(
             player,
             HotkeyService.DEFAULT_PAUSE_RESUME_KEY,
@@ -60,8 +62,13 @@ public class MainController {
 
     public MainController(Stage stage) {
         this.stage = stage;
+        this.settingsWindow = new SettingsWindow(stage);
+        this.inspectorWindow = new InspectorWindow(stage);
         recorder.setIgnoredKeyCodes(resolveIgnoredKeys());
-        player.setStateListener(state -> Platform.runLater(this::updateControls));
+        player.setStateListener(state -> Platform.runLater(() -> {
+            syncHotkeyRegistration();
+            updateControls();
+        }));
 
         root.setPadding(new Insets(10));
         root.setTop(buildTopArea());
@@ -87,11 +94,17 @@ public class MainController {
     }
 
     public void shutdown() {
+        if (recorder.isRecording()) {
+            recorder.stop();
+        }
+        player.stop();
+        settingsWindow.close();
+        inspectorWindow.close();
         hotkeys.close();
     }
 
     private Parent buildTopArea() {
-        VBox box = new VBox(8, buildMenuBar(), buildToolbar(), fileLabel);
+        VBox box = new VBox(8, buildHeaderBar(), buildActionBar());
         box.setPadding(new Insets(0, 0, 10, 0));
         return box;
     }
@@ -132,14 +145,43 @@ public class MainController {
         itemPause.setOnAction(e -> togglePause());
         itemStop.setOnAction(e -> stopPlayback());
 
-        return new MenuBar(fileMenu, macroMenu);
+        Menu toolsMenu = new Menu("Инструменты");
+        MenuItem itemInspector = new MenuItem("Инспектор координат и цвета");
+        toolsMenu.getItems().add(itemInspector);
+        itemInspector.setOnAction(e -> openInspector());
+        return new MenuBar(fileMenu, macroMenu, toolsMenu);
     }
 
-    private Parent buildToolbar() {
-        Button btnNew = new Button("Новый");
-        Button btnOpen = new Button("Открыть");
-        Button btnSave = new Button("Сохранить");
-        Button btnSaveAs = new Button("Сохранить как");
+    private Parent buildHeaderBar() {
+        MenuBar menuBar = buildMenuBar();
+        Button settingsButton = new Button("Настройки");
+        settingsButton.setOnAction(e -> openSettings());
+        Button inspectorButton = new Button("Инспектор");
+        inspectorButton.setOnAction(e -> openInspector());
+        HBox rightActions = new HBox(8, inspectorButton, settingsButton);
+        rightActions.setAlignment(Pos.CENTER_RIGHT);
+
+        BorderPane headerBar = new BorderPane();
+        headerBar.setLeft(menuBar);
+        headerBar.setRight(rightActions);
+        BorderPane.setAlignment(rightActions, Pos.CENTER_RIGHT);
+        return headerBar;
+    }
+
+    private Parent buildActionBar() {
+        fileLabel.setMaxWidth(Double.MAX_VALUE);
+        fileLabel.setAlignment(Pos.CENTER_RIGHT);
+        fileLabel.setTextOverrun(OverrunStyle.LEADING_ELLIPSIS);
+
+        BorderPane actionBar = new BorderPane();
+        actionBar.setLeft(buildToolbar());
+        actionBar.setCenter(fileLabel);
+        BorderPane.setAlignment(fileLabel, Pos.CENTER_RIGHT);
+        BorderPane.setMargin(fileLabel, new Insets(0, 0, 0, 12));
+        return actionBar;
+    }
+
+    private HBox buildToolbar() {
         Button btnRecord = new Button("Начать запись");
         Button btnStopRecord = new Button("Остановить запись");
         Button btnPlay = new Button("Запустить");
@@ -148,10 +190,6 @@ public class MainController {
         Button btnFromDsl = new Button("Сценарий → макрос");
         Button btnToDsl = new Button("Макрос → сценарий");
 
-        btnNew.setOnAction(e -> newMacro());
-        btnOpen.setOnAction(e -> openMacro());
-        btnSave.setOnAction(e -> saveMacro());
-        btnSaveAs.setOnAction(e -> saveMacroAs());
         btnRecord.setOnAction(e -> startRecording());
         btnStopRecord.setOnAction(e -> stopRecording());
         btnPlay.setOnAction(e -> playMacro());
@@ -166,15 +204,9 @@ public class MainController {
         btnPauseRef = btnPause;
         btnStopRef = btnStop;
 
-        return new HBox(8,
-                btnNew, btnOpen, btnSave, btnSaveAs,
-                new Separator(),
-                btnRecord, btnStopRecord,
-                new Separator(),
-                btnPlay, btnPause, btnStop,
-                new Separator(),
-                btnFromDsl, btnToDsl
-        );
+        HBox toolbar = new HBox(8, btnRecord, btnStopRecord, btnPlay, btnPause, btnStop, btnFromDsl, btnToDsl);
+        toolbar.setAlignment(Pos.CENTER_LEFT);
+        return toolbar;
     }
 
     private Parent buildTable() {
@@ -277,6 +309,7 @@ public class MainController {
     private void startRecording() {
         try {
             recorder.start();
+            syncHotkeyRegistration();
             updateControls();
             status("Запись начата");
         } catch (Exception ex) {
@@ -294,6 +327,7 @@ public class MainController {
             currentMacro.name = deriveMacroName();
             dirty = true;
             refreshAll();
+            syncHotkeyRegistration();
             updateControls();
             status("Запись остановлена, макрос обновлен");
         } catch (Exception ex) {
@@ -311,6 +345,7 @@ public class MainController {
             return;
         }
         player.play(currentMacro);
+        syncHotkeyRegistration();
         updateControls();
         status("Воспроизведение запущено");
     }
@@ -329,6 +364,7 @@ public class MainController {
 
     private void stopPlayback() {
         player.stop();
+        syncHotkeyRegistration();
         updateControls();
         status("Воспроизведение остановлено");
     }
@@ -390,6 +426,16 @@ public class MainController {
         } catch (Exception ex) {
             showError("Не удалось сохранить макрос в новый файл", ex);
         }
+    }
+
+    private void openSettings() {
+        settingsWindow.show();
+        status("Открыто окно настроек");
+    }
+
+    private void openInspector() {
+        inspectorWindow.show();
+        status("Открыто окно инспектора");
     }
 
     private void validateDsl() {
@@ -473,6 +519,23 @@ public class MainController {
 
     private Set<Integer> resolveIgnoredKeys() {
         return Set.of(HotkeyService.DEFAULT_PAUSE_RESUME_KEY, HotkeyService.DEFAULT_STOP_KEY);
+    }
+
+    private void syncHotkeyRegistration() {
+        boolean shouldRegister = recorder.isRecording()
+                || player.getState() == PlayerState.PLAYING
+                || player.getState() == PlayerState.PAUSED;
+
+        try {
+            if (shouldRegister) {
+                hotkeys.start();
+            } else {
+                hotkeys.close();
+            }
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+            status("Горячие клавиши не запущены: " + readableMessage(ex));
+        }
     }
 
     private void updateControls() {

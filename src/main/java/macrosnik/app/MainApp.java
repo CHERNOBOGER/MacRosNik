@@ -23,7 +23,6 @@ public class MainApp extends Application {
         stage.setOnCloseRequest(e -> controller.shutdown());
         stage.show();
 
-        controller.startHotkeys();
     }
 
     public static void main(String[] args) {
