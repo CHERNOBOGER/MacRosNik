@@ -37,12 +37,14 @@ public class SettingsWindow {
 
     private Stage createStage() {
         Label title = new Label("Настройки");
-        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        title.getStyleClass().add("section-title");
 
         Label message = new Label("Окно настроек готово для дальнейшей доработки.");
         message.setWrapText(true);
+        message.getStyleClass().add("section-subtitle");
 
         Button closeButton = new Button("Закрыть");
+        closeButton.getStyleClass().add("secondary-button");
         closeButton.setOnAction(event -> close());
 
         Region spacer = new Region();
@@ -51,11 +53,14 @@ public class SettingsWindow {
         VBox root = new VBox(12, title, message, spacer, closeButton);
         root.setPadding(new Insets(18));
         root.setAlignment(Pos.TOP_LEFT);
+        root.getStyleClass().addAll("app-root", "panel-card");
 
         Stage settingsStage = new Stage();
         settingsStage.initOwner(owner);
         settingsStage.setTitle("MacRosNik - Настройки");
-        settingsStage.setScene(new Scene(root, 420, 180));
+        Scene scene = new Scene(root, 420, 180);
+        UiStyles.apply(scene);
+        settingsStage.setScene(scene);
         settingsStage.setMinWidth(360);
         settingsStage.setMinHeight(160);
         return settingsStage;

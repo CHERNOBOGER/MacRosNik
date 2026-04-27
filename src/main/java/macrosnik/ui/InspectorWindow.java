@@ -105,19 +105,22 @@ public class InspectorWindow {
         grid.add(wrapPreview(frozenColorPreview), 3, 1);
 
         statusLabel.setWrapText(true);
-        statusLabel.setStyle("-fx-text-fill: #555;");
+        statusLabel.getStyleClass().add("section-subtitle");
 
         VBox root = new VBox(8, grid, statusLabel);
         root.setPadding(new Insets(10));
+        root.getStyleClass().addAll("app-root", "panel-card");
 
         Stage inspectorStage = new Stage();
         inspectorStage.initOwner(owner);
         inspectorStage.setTitle("MacRosNik - Инспектор");
-        inspectorStage.setScene(new Scene(root, 320, 130));
+        Scene scene = new Scene(root, 320, 160);
+        UiStyles.apply(scene);
+        inspectorStage.setScene(scene);
         inspectorStage.setMinWidth(320);
-        inspectorStage.setMinHeight(130);
+        inspectorStage.setMinHeight(160);
         inspectorStage.setMaxWidth(320);
-        inspectorStage.setMaxHeight(130);
+        inspectorStage.setMaxHeight(160);
         inspectorStage.setResizable(false);
         inspectorStage.setAlwaysOnTop(true);
         inspectorStage.setOnShown(event -> {
@@ -274,6 +277,7 @@ public class InspectorWindow {
     private Label rowLabel(String text) {
         Label label = new Label(text);
         label.setMinWidth(52);
+        label.getStyleClass().add("meta-caption");
         return label;
     }
 
@@ -284,6 +288,7 @@ public class InspectorWindow {
         button.setPrefWidth(width);
         button.setMinWidth(width);
         button.setMaxWidth(width);
+        button.getStyleClass().addAll("utility-button", "value-button");
         return button;
     }
 
