@@ -1,0 +1,212 @@
+.root {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-background-color: #f4f3ef;
+    -fx-text-fill: #222222;
+}
+
+.app-root {
+    -fx-background-color: #f4f3ef;
+}
+
+.panel-card {
+    -fx-background-color: #fcfcfa;
+    -fx-background-radius: 14;
+    -fx-border-color: #dad8d1;
+    -fx-border-radius: 14;
+    -fx-padding: 14;
+}
+
+.app-title {
+    -fx-font-size: 21px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #1f1f1c;
+}
+
+.app-subtitle {
+    -fx-font-size: 12px;
+    -fx-text-fill: #66655f;
+}
+
+.section-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #232320;
+}
+
+.section-subtitle {
+    -fx-font-size: 12px;
+    -fx-text-fill: #6d6b65;
+}
+
+.section-note {
+    -fx-font-size: 12px;
+    -fx-text-fill: #4f4d48;
+}
+
+.meta-caption {
+    -fx-font-size: 12px;
+    -fx-text-fill: #6d6b65;
+}
+
+.meta-value {
+    -fx-text-fill: #292926;
+}
+
+.status-caption {
+    -fx-font-size: 11px;
+    -fx-text-fill: #6d6b65;
+}
+
+.status-message {
+    -fx-text-fill: #222222;
+}
+
+.hotkey-chip {
+    -fx-background-color: #fcfcfa;
+    -fx-background-radius: 999;
+    -fx-border-color: #dad8d1;
+    -fx-border-radius: 999;
+    -fx-padding: 10 14;
+    -fx-text-fill: #55544f;
+}
+
+.menu-bar,
+.app-menu-bar {
+    -fx-background-color: #fcfcfa;
+    -fx-background-radius: 12;
+    -fx-border-color: #dad8d1;
+    -fx-border-radius: 12;
+    -fx-padding: 4 6;
+}
+
+.menu-bar > .container > .menu-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8;
+    -fx-padding: 6 10;
+}
+
+.menu-bar > .container > .menu-button:hover,
+.menu-bar > .container > .menu-button:showing {
+    -fx-background-color: #efede8;
+}
+
+.button {
+    -fx-background-color: #ece9e3;
+    -fx-background-radius: 10;
+    -fx-border-color: #d5d2ca;
+    -fx-border-radius: 10;
+    -fx-text-fill: #222222;
+    -fx-padding: 8 14;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #e5e1da;
+}
+
+.button:focused {
+    -fx-border-color: #8f8b82;
+}
+
+.button:disabled {
+    -fx-opacity: 0.58;
+}
+
+.button.primary-button {
+    -fx-background-color: #2f302d;
+    -fx-border-color: #2f302d;
+    -fx-text-fill: #fcfcfa;
+}
+
+.button.primary-button:hover {
+    -fx-background-color: #393a36;
+}
+
+.button.secondary-button,
+.button.utility-button {
+    -fx-background-color: #f7f5f1;
+}
+
+.button.value-button {
+    -fx-font-family: "Consolas";
+    -fx-background-color: #f7f5f1;
+}
+
+.tab-pane {
+    -fx-tab-min-height: 34;
+}
+
+.tab-pane > .tab-header-area {
+    -fx-padding: 0 0 8 0;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-background-color: #ebe8e2;
+    -fx-background-radius: 10 10 0 0;
+    -fx-padding: 6 14;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected {
+    -fx-background-color: #fcfcfa;
+}
+
+.tab-pane > .tab-header-area > .tab-header-background {
+    -fx-background-color: transparent;
+}
+
+.tab-pane > .tab-content-area {
+    -fx-background-color: #fcfcfa;
+    -fx-background-radius: 14;
+    -fx-border-color: #dad8d1;
+    -fx-border-radius: 14;
+    -fx-padding: 12;
+}
+
+.table-view,
+.text-area {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12;
+    -fx-border-color: #d9d7cf;
+    -fx-border-radius: 12;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #f1efea;
+    -fx-background-radius: 12 12 0 0;
+}
+
+.table-view .column-header,
+.table-view .filler {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent #dfddd6 transparent;
+}
+
+.table-row-cell {
+    -fx-border-color: transparent transparent #efede8 transparent;
+    -fx-background-color: #ffffff;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #ecefe9;
+}
+
+.text-area .content {
+    -fx-background-color: #fbfbf9;
+}
+
+.scenario-placeholder {
+    -fx-text-fill: #7b7972;
+}
+
+.dialog-pane {
+    -fx-background-color: #f4f3ef;
+}
+
+.dialog-pane:header .header-panel {
+    -fx-background-color: #fcfcfa;
+}
+
+.dialog-pane > *.button-bar > *.container {
+    -fx-background-color: #f4f3ef;
+}

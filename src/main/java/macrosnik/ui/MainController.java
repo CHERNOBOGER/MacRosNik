@@ -8,8 +8,10 @@ import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
@@ -34,6 +36,8 @@ public class MainController {
     private final TableView<MacroTableRow> table = new TableView<>();
     private final ObservableList<MacroTableRow> rows = FXCollections.observableArrayList();
     private final TextArea dslArea = new TextArea();
+    private final Label saveStateLabel = new Label();
+    private final Label macroSummaryLabel = new Label();
     private final Label statusLabel = new Label("Готово");
     private final Label fileLabel = new Label("Файл: не выбран");
 
@@ -70,7 +74,8 @@ public class MainController {
             updateControls();
         }));
 
-        root.setPadding(new Insets(10));
+        root.getStyleClass().add("app-root");
+        root.setPadding(new Insets(14));
         root.setTop(buildTopArea());
         root.setCenter(buildTabs());
         root.setBottom(buildBottomBar());
@@ -104,13 +109,14 @@ public class MainController {
     }
 
     private Parent buildTopArea() {
-        VBox box = new VBox(8, buildHeaderBar(), buildActionBar());
-        box.setPadding(new Insets(0, 0, 10, 0));
+        VBox box = new VBox(12, buildHeaderBar(), buildMenuBar(), buildActionPanel());
+        box.setPadding(new Insets(0, 0, 12, 0));
         return box;
     }
 
     private Parent buildTabs() {
         TabPane tabPane = new TabPane();
+        tabPane.getStyleClass().add("app-tabs");
         tabPane.getTabs().add(new Tab("Макрос", buildTable()));
         tabPane.getTabs().add(new Tab("Сценарий", buildDslPanel()));
         tabPane.getTabs().add(new Tab("Справка", buildHelpPanel()));
@@ -149,54 +155,72 @@ public class MainController {
         MenuItem itemInspector = new MenuItem("Инспектор координат и цвета");
         toolsMenu.getItems().add(itemInspector);
         itemInspector.setOnAction(e -> openInspector());
-        return new MenuBar(fileMenu, macroMenu, toolsMenu);
+
+        MenuBar menuBar = new MenuBar(fileMenu, macroMenu, toolsMenu);
+        menuBar.getStyleClass().add("app-menu-bar");
+        return menuBar;
     }
 
     private Parent buildHeaderBar() {
-        MenuBar menuBar = buildMenuBar();
-        Button settingsButton = new Button("Настройки");
-        settingsButton.setOnAction(e -> openSettings());
-        Button inspectorButton = new Button("Инспектор");
-        inspectorButton.setOnAction(e -> openInspector());
-        HBox rightActions = new HBox(8, inspectorButton, settingsButton);
-        rightActions.setAlignment(Pos.CENTER_RIGHT);
+        Label title = new Label("MacRosNik");
+        title.getStyleClass().add("app-title");
 
-        BorderPane headerBar = new BorderPane();
-        headerBar.setLeft(menuBar);
-        headerBar.setRight(rightActions);
-        BorderPane.setAlignment(rightActions, Pos.CENTER_RIGHT);
+        VBox titleBox = new VBox(2, title);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Button settingsButton = createButton("Настройки", "utility-button");
+        settingsButton.setOnAction(e -> openSettings());
+        Button inspectorButton = createButton("Инспектор", "utility-button");
+        inspectorButton.setOnAction(e -> openInspector());
+
+        HBox headerBar = new HBox(16, titleBox, spacer, inspectorButton, settingsButton);
+        headerBar.setAlignment(Pos.CENTER_LEFT);
         return headerBar;
     }
 
-    private Parent buildActionBar() {
+    private Parent buildActionPanel() {
         fileLabel.setMaxWidth(Double.MAX_VALUE);
-        fileLabel.setAlignment(Pos.CENTER_RIGHT);
-        fileLabel.setTextOverrun(OverrunStyle.LEADING_ELLIPSIS);
+        fileLabel.setWrapText(true);
+        fileLabel.getStyleClass().add("meta-value");
+        saveStateLabel.getStyleClass().add("meta-caption");
 
-        BorderPane actionBar = new BorderPane();
-        actionBar.setLeft(buildToolbar());
-        actionBar.setCenter(fileLabel);
-        BorderPane.setAlignment(fileLabel, Pos.CENTER_RIGHT);
-        BorderPane.setMargin(fileLabel, new Insets(0, 0, 0, 12));
-        return actionBar;
+        VBox controlsCard = new VBox(
+                12,
+                createSectionHeader("Управление макросом",""),
+                buildToolbar()
+        );
+        controlsCard.getStyleClass().add("panel-card");
+        HBox.setHgrow(controlsCard, Priority.ALWAYS);
+
+        VBox fileCard = new VBox(
+                8,
+                createSectionHeader("Текущий файл", "Путь и состояние сохранения."),
+                saveStateLabel,
+                fileLabel
+        );
+        fileCard.getStyleClass().add("panel-card");
+        fileCard.setPrefWidth(330);
+        fileCard.setMinWidth(280);
+
+        HBox panel = new HBox(12, controlsCard, fileCard);
+        panel.setAlignment(Pos.TOP_LEFT);
+        return panel;
     }
 
-    private HBox buildToolbar() {
-        Button btnRecord = new Button("Начать запись");
-        Button btnStopRecord = new Button("Остановить запись");
-        Button btnPlay = new Button("Запустить");
-        Button btnPause = new Button("Пауза / продолжить");
-        Button btnStop = new Button("Стоп");
-        Button btnFromDsl = new Button("Сценарий → макрос");
-        Button btnToDsl = new Button("Макрос → сценарий");
+    private Parent buildToolbar() {
+        Button btnRecord = createButton("Начать запись", "primary-button");
+        Button btnStopRecord = createButton("Остановить запись", "secondary-button");
+        Button btnPlay = createButton("Запустить", "primary-button");
+        Button btnPause = createButton("Пауза", "secondary-button");
+        Button btnStop = createButton("Стоп", "secondary-button");
 
         btnRecord.setOnAction(e -> startRecording());
         btnStopRecord.setOnAction(e -> stopRecording());
         btnPlay.setOnAction(e -> playMacro());
         btnPause.setOnAction(e -> togglePause());
         btnStop.setOnAction(e -> stopPlayback());
-        btnFromDsl.setOnAction(e -> applyDslToMacro());
-        btnToDsl.setOnAction(e -> fillDslFromMacro());
 
         btnRecordRef = btnRecord;
         btnStopRecordRef = btnStopRecord;
@@ -204,8 +228,9 @@ public class MainController {
         btnPauseRef = btnPause;
         btnStopRef = btnStop;
 
-        HBox toolbar = new HBox(8, btnRecord, btnStopRecord, btnPlay, btnPause, btnStop, btnFromDsl, btnToDsl);
+        FlowPane toolbar = new FlowPane(8, 8, btnRecord, btnStopRecord, btnPlay, btnPause, btnStop);
         toolbar.setAlignment(Pos.CENTER_LEFT);
+        toolbar.setPrefWrapLength(760);
         return toolbar;
     }
 
@@ -221,40 +246,58 @@ public class MainController {
 
         table.getColumns().setAll(colType, colDelay, colDetails);
         table.setItems(rows);
+        table.setPlaceholder(createPlaceholderLabel("После записи или применения сценария здесь появятся шаги макроса."));
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
 
         colType.setPrefWidth(220);
         colDelay.setPrefWidth(180);
         colDetails.setPrefWidth(620);
 
-        return table;
+        macroSummaryLabel.getStyleClass().add("section-note");
+
+        VBox box = new VBox(
+                8,
+                createSectionHeader(
+                        "Шаги макроса",
+                        "Список обновляется после записи, открытия файла и применения сценария."
+                ),
+                macroSummaryLabel,
+                table
+        );
+        VBox.setVgrow(table, Priority.ALWAYS);
+        return box;
     }
 
     private Parent buildDslPanel() {
         dslArea.setWrapText(false);
 
-        Button validateButton = new Button("Проверить сценарий");
-        Button applyButton = new Button("Применить к макросу");
-        Button exportButton = new Button("Заполнить из макроса");
+        Button validateButton = createButton("Проверить сценарий", "secondary-button");
+        Button applyButton = createButton("Применить к макросу", "primary-button");
+        Button exportButton = createButton("Заполнить из макроса", "secondary-button");
         applyButton.setDefaultButton(true);
 
         validateButton.setOnAction(e -> validateDsl());
         applyButton.setOnAction(e -> applyDslToMacro());
         exportButton.setOnAction(e -> fillDslFromMacro());
 
-        HBox topActions = new HBox(8, validateButton, exportButton);
-        HBox bottomActions = new HBox(applyButton);
-        bottomActions.setAlignment(Pos.CENTER_RIGHT);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox actions = new HBox(8, validateButton, exportButton, spacer, applyButton);
+        actions.setAlignment(Pos.CENTER_LEFT);
 
         StackPane editorPane = new StackPane(dslArea, createScenarioPlaceholder());
         VBox.setVgrow(editorPane, Priority.ALWAYS);
 
         VBox box = new VBox(8,
-                new Label("Редактор сценария"),
-                topActions,
-                editorPane,
-                bottomActions
+                createSectionHeader(
+                        "Редактор сценария",
+                        "Проверка не меняет макрос, а применение сразу обновляет шаги."
+                ),
+                actions,
+                editorPane
         );
+        VBox.setVgrow(editorPane, Priority.ALWAYS);
         return box;
     }
 
@@ -270,6 +313,7 @@ public class MainController {
         placeholder.setWrapText(true);
         placeholder.setMouseTransparent(true);
         placeholder.setOpacity(0.45);
+        placeholder.getStyleClass().add("scenario-placeholder");
         placeholder.maxWidthProperty().bind(dslArea.widthProperty().subtract(24));
         placeholder.visibleProperty().bind(dslArea.textProperty().isEmpty());
         StackPane.setAlignment(placeholder, Pos.TOP_LEFT);
@@ -285,7 +329,7 @@ public class MainController {
                 + "1. Запись: нажмите 'Начать запись', выполните действия, затем 'Остановить запись'.\n"
                 + "2. Сохранение: используйте 'Сохранить как', чтобы выбрать свой JSON-файл.\n"
                 + "3. Сценарий: на вкладке 'Сценарий' можно описывать макрос текстом.\n\n"
-                + "Примеры сценариев:\n"
+                + "Пример сценария:\n"
                 + "Подождать мс: 500\n"
                 + "Нажать ЛКМ: 400 300\n"
                 + "Нажать клавишу: Ввод\n"
@@ -296,14 +340,62 @@ public class MainController {
                 + "Горячие клавиши:\n"
                 + "Пауза/продолжить: F8\n"
                 + "Экстренный стоп: F12");
-        return help;
+
+        VBox box = new VBox(
+                8,
+                createSectionHeader(
+                        "Как начать",
+                        "Короткая памятка по записи, редактированию сценария и горячим клавишам."
+                ),
+                help
+        );
+        VBox.setVgrow(help, Priority.ALWAYS);
+        return box;
     }
 
     private Parent buildBottomBar() {
-        Label hint = new Label("Горячие клавиши: пауза/продолжить — F8, экстренный стоп — F12");
-        VBox box = new VBox(4, hint, statusLabel);
-        BorderPane.setMargin(box, new Insets(10, 0, 0, 0));
+        statusLabel.getStyleClass().add("status-message");
+
+        Label statusTitle = new Label("Состояние");
+        statusTitle.getStyleClass().add("status-caption");
+
+        VBox statusCard = new VBox(2, statusTitle, statusLabel);
+        statusCard.getStyleClass().add("panel-card");
+        HBox.setHgrow(statusCard, Priority.ALWAYS);
+
+        Label hint = new Label("F8 — пауза/продолжить, F12 — экстренный стоп");
+        hint.getStyleClass().add("hotkey-chip");
+
+        HBox box = new HBox(12, statusCard, hint);
+        box.setAlignment(Pos.CENTER_LEFT);
+        BorderPane.setMargin(box, new Insets(12, 0, 0, 0));
         return box;
+    }
+
+    private VBox createSectionHeader(String titleText, String subtitleText) {
+        Label title = new Label(titleText);
+        title.getStyleClass().add("section-title");
+
+        Label subtitle = new Label(subtitleText);
+        subtitle.setWrapText(true);
+        subtitle.getStyleClass().add("section-subtitle");
+
+        return new VBox(2, title, subtitle);
+    }
+
+    private Button createButton(String text, String... styleClasses) {
+        Button button = new Button(text);
+        button.setMinHeight(38);
+        button.getStyleClass().addAll(styleClasses);
+        return button;
+    }
+
+    private Label createPlaceholderLabel(String text) {
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setPadding(new Insets(12));
+        label.getStyleClass().add("section-subtitle");
+        return label;
     }
 
     private void startRecording() {
@@ -467,16 +559,19 @@ public class MainController {
         refreshTable();
         updateTitle();
         updateFileLabel();
+        updateSaveStateLabel();
     }
 
     private void refreshTable() {
         rows.clear();
         if (currentMacro.actions == null) {
+            updateMacroSummary();
             return;
         }
         for (int i = 0; i < currentMacro.actions.size(); i++) {
             rows.add(MacroTableRow.from(i, currentMacro.actions.get(i)));
         }
+        updateMacroSummary();
     }
 
     private void updateTitle() {
@@ -486,7 +581,27 @@ public class MainController {
     }
 
     private void updateFileLabel() {
-        fileLabel.setText("Файл: " + (currentFilePath == null ? "не выбран" : currentFilePath.toString()));
+        fileLabel.setText(currentFilePath == null
+                ? "Файл пока не выбран. Можно начать с записи или открыть существующий макрос."
+                : currentFilePath.toString());
+    }
+
+    private void updateSaveStateLabel() {
+        if (currentFilePath == null) {
+            saveStateLabel.setText(dirty
+                    ? "Есть изменения, файл еще не сохранен"
+                    : "Новый макрос, файл еще не сохранен");
+            return;
+        }
+        saveStateLabel.setText(dirty ? "Есть несохраненные изменения" : "Изменения сохранены");
+    }
+
+    private void updateMacroSummary() {
+        if (rows.isEmpty()) {
+            macroSummaryLabel.setText("Пока нет действий. Запишите макрос или примените сценарий.");
+            return;
+        }
+        macroSummaryLabel.setText("Шагов в макросе: " + rows.size());
     }
 
     private String deriveMacroName() {
@@ -552,6 +667,7 @@ public class MainController {
         btnStopRef.setDisable(!playing && !paused);
         btnRecordRef.setDisable(recording || playing || paused);
         btnStopRecordRef.setDisable(!recording);
+        btnPauseRef.setText(paused ? "Продолжить" : "Пауза");
     }
 
     private void status(String text) {
@@ -580,6 +696,7 @@ public class MainController {
             message = "Не удалось прочитать JSON макроса. Требовалось открыть пакет enums для Jackson. В исправленной версии это уже учтено.";
         }
         alert.setContentText(message);
+        UiStyles.apply(alert.getDialogPane());
         alert.showAndWait();
         ex.printStackTrace();
         status(title);
