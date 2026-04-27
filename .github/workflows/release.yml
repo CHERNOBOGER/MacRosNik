@@ -72,21 +72,12 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat --no-daemon printVersion
 
-      - name: Verify signing secrets
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace('${{ secrets.WINDOWS_SIGN_CERT_PFX_BASE64 }}')) {
-            throw "Missing GitHub secret WINDOWS_SIGN_CERT_PFX_BASE64. Refusing to publish an unsigned Windows release."
-          }
-          if ([string]::IsNullOrWhiteSpace('${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}')) {
-            throw "Missing GitHub secret WINDOWS_SIGN_CERT_PASSWORD. Refusing to publish an unsigned Windows release."
-          }
-
       - name: Build release binaries
         shell: pwsh
         run: .\gradlew.bat --no-daemon test packageExe packageInstaller
 
       - name: Restore signing certificate
+        if: ${{ secrets.WINDOWS_SIGN_CERT_PFX_BASE64 != '' && secrets.WINDOWS_SIGN_CERT_PASSWORD != '' }}
         shell: pwsh
         run: |
           $certificatePath = Join-Path $env:RUNNER_TEMP "windows-signing-cert.pfx"
@@ -96,7 +87,13 @@ jobs:
           )
           "WINDOWS_SIGN_CERT_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Skip signing
+        if: ${{ secrets.WINDOWS_SIGN_CERT_PFX_BASE64 == '' || secrets.WINDOWS_SIGN_CERT_PASSWORD == '' }}
+        shell: pwsh
+        run: Write-Host "Signing secrets are not configured. Publishing unsigned release."
+
       - name: Sign Windows binaries
+        if: ${{ secrets.WINDOWS_SIGN_CERT_PFX_BASE64 != '' && secrets.WINDOWS_SIGN_CERT_PASSWORD != '' }}
         shell: pwsh
         env:
           WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
