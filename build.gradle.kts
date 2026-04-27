@@ -31,7 +31,7 @@ fun resolveGitVersion(rootPath: String): GitVersionInfo {
     val isDirty = describe?.endsWith("-dirty") == true
 
     val exactTagMatch = normalizedDescribe?.let {
-        Regex("""^v(\d+(?:\.\d+){1,3})$""").matchEntire(it)
+        Regex("""^v(\d+(?:\.\d+){0,3})$""").matchEntire(it)
     }
     if (exactTagMatch != null) {
         val exactVersion = exactTagMatch.groupValues[1]
@@ -41,7 +41,7 @@ fun resolveGitVersion(rootPath: String): GitVersionInfo {
     }
 
     val describedTagMatch = normalizedDescribe?.let {
-        Regex("""^v(\d+(?:\.\d+){1,3})-(\d+)-g([0-9a-f]+)$""").matchEntire(it)
+        Regex("""^v(\d+(?:\.\d+){0,3})-(\d+)-g([0-9a-f]+)$""").matchEntire(it)
     }
     if (describedTagMatch != null) {
         val baseVersion = describedTagMatch.groupValues[1]
