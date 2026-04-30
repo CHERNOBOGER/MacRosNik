@@ -1,7 +1,7 @@
-HELP.md
-.gradle
-.gradle-user-home/
-build/
+# Local Gradle state
+/.gradle/
+/.gradle-user-home/
+/build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -19,7 +19,7 @@ bin/
 !**/src/test/**/bin/
 
 ### IntelliJ IDEA ###
-.idea
+/.idea/
 *.iws
 *.iml
 *.ipr

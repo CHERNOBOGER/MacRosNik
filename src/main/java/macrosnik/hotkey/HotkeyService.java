@@ -16,8 +16,9 @@ public class HotkeyService implements NativeKeyListener, AutoCloseable {
     private final int stopKey;
     private final Runnable emergencyStop;
 
-
-    private volatile boolean started = false;
+    private volatile boolean started;
+    private boolean pauseResumePressed;
+    private boolean stopPressed;
 
     public HotkeyService(MacroPlayer player, int pauseResumeKey, int stopKey, Runnable emergencyStop) {
         this.player = player;
@@ -26,60 +27,91 @@ public class HotkeyService implements NativeKeyListener, AutoCloseable {
         this.stopKey = stopKey;
     }
 
-
     public synchronized void start() {
-        if (started) return;
+        if (started) {
+            return;
+        }
 
         try {
-            System.out.println("Registering native hook...");
             if (!GlobalScreen.isNativeHookRegistered()) {
                 GlobalScreen.registerNativeHook();
             }
+            GlobalScreen.removeNativeKeyListener(this);
             GlobalScreen.addNativeKeyListener(this);
             started = true;
-            System.out.println("Native hook registered OK");
         } catch (NativeHookException e) {
             throw new RuntimeException("Не удалось зарегистрировать глобальный перехват клавиатуры", e);
         }
     }
 
+    @Override
+    public synchronized void nativeKeyPressed(NativeKeyEvent event) {
+        handleKeyPressed(event.getKeyCode());
+    }
 
     @Override
-    public void nativeKeyPressed(NativeKeyEvent e) {
-        System.out.println("GLOBAL KEY: " + NativeKeyEvent.getKeyText(e.getKeyCode()));
+    public synchronized void nativeKeyReleased(NativeKeyEvent event) {
+        handleKeyReleased(event.getKeyCode());
+    }
 
-        if (e.getKeyCode() == stopKey) {
-            System.out.println("EMERGENCY STOP pressed");
-            emergencyStop.run();
+    @Override
+    public void nativeKeyTyped(NativeKeyEvent event) {
+    }
+
+    synchronized void handleKeyPressed(int keyCode) {
+        if (!started) {
             return;
         }
 
-        if (e.getKeyCode() == pauseResumeKey) {
-            System.out.println("PAUSE pressed");
-            if (player.getState() == PlayerState.PAUSED) {
-                player.resume();
-            } else if (player.getState() == PlayerState.PLAYING) {
-                player.pause();
+        if (keyCode == stopKey) {
+            if (!stopPressed) {
+                stopPressed = true;
+                emergencyStop.run();
             }
+            return;
+        }
+
+        if (keyCode == pauseResumeKey && !pauseResumePressed) {
+            pauseResumePressed = true;
+            togglePauseResume();
         }
     }
 
+    synchronized void handleKeyReleased(int keyCode) {
+        if (keyCode == stopKey) {
+            stopPressed = false;
+        }
+        if (keyCode == pauseResumeKey) {
+            pauseResumePressed = false;
+        }
+    }
 
+    synchronized void startForTest() {
+        started = true;
+        pauseResumePressed = false;
+        stopPressed = false;
+    }
 
-    @Override public void nativeKeyReleased(NativeKeyEvent e) { }
-    @Override public void nativeKeyTyped(NativeKeyEvent e) { }
+    private void togglePauseResume() {
+        if (player.getState() == PlayerState.PAUSED) {
+            player.resume();
+        } else if (player.getState() == PlayerState.PLAYING) {
+            player.pause();
+        }
+    }
 
     @Override
     public synchronized void close() {
-        if (!started) return;
+        if (!started) {
+            return;
+        }
         try {
             GlobalScreen.removeNativeKeyListener(this);
-            if (GlobalScreen.isNativeHookRegistered()) {
-                GlobalScreen.unregisterNativeHook();
-            }
-        } catch (NativeHookException ignored) {
+        } catch (Throwable ignored) {
         } finally {
             started = false;
+            pauseResumePressed = false;
+            stopPressed = false;
         }
     }
 }

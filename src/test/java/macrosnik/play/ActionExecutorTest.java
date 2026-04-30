@@ -22,13 +22,25 @@ class ActionExecutorTest {
         MacroPlayer player = new MacroPlayer();
         FakeRobot robot = new FakeRobot();
 
-        executor.execute(new MouseButtonAction(0, MouseButton.LEFT, MouseButtonActionType.CLICK), robot, player);
+        executor.execute(new MouseButtonAction(0, MouseButton.LEFT, MouseButtonActionType.CLICK, 120, 80), robot, player);
         executor.execute(new KeyAction(0, 66, KeyActionType.CLICK), robot, player);
         executor.execute(new KeyAction(0, 65, KeyActionType.DOWN), robot, player);
         executor.execute(new KeyAction(0, 65, KeyActionType.UP), robot, player);
-        executor.execute(new TextInputAction(0, "Привет"), robot, player);
+        executor.execute(new TextInputAction(0, "text"), robot, player);
 
-        assertEquals(List.of("mousePress:1024", "mouseRelease:1024", "keyPress:66", "keyRelease:66", "keyPress:65", "keyRelease:65", "inputText:Привет"), robot.calls);
+        assertEquals(
+                List.of(
+                        "mouseMove:120,80",
+                        "mousePress:1024",
+                        "mouseRelease:1024",
+                        "keyPress:66",
+                        "keyRelease:66",
+                        "keyPress:65",
+                        "keyRelease:65",
+                        "inputText:text"
+                ),
+                robot.calls
+        );
     }
 
     @Test

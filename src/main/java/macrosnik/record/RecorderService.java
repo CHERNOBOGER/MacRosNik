@@ -38,18 +38,12 @@ public class RecorderService
             if (!GlobalScreen.isNativeHookRegistered()) {
                 GlobalScreen.registerNativeHook();
             }
-            GlobalScreen.removeNativeKeyListener(this);
-            GlobalScreen.removeNativeMouseListener(this);
-            GlobalScreen.removeNativeMouseMotionListener(this);
-            GlobalScreen.removeNativeMouseWheelListener(this);
+            detachListeners();
         } catch (Throwable ignored) {
         }
 
         try {
-            GlobalScreen.addNativeKeyListener(this);
-            GlobalScreen.addNativeMouseListener(this);
-            GlobalScreen.addNativeMouseMotionListener(this);
-            GlobalScreen.addNativeMouseWheelListener(this);
+            attachListeners();
         } catch (Throwable e) {
             recording = false;
             throw new RuntimeException("Не удалось запустить перехват глобальных событий", e);
@@ -60,14 +54,25 @@ public class RecorderService
         recording = false;
 
         try {
-            GlobalScreen.removeNativeKeyListener(this);
-            GlobalScreen.removeNativeMouseListener(this);
-            GlobalScreen.removeNativeMouseMotionListener(this);
-            GlobalScreen.removeNativeMouseWheelListener(this);
+            detachListeners();
         } catch (Throwable ignored) {
         }
 
         return List.copyOf(buffer);
+    }
+
+    private void attachListeners() {
+        GlobalScreen.addNativeKeyListener(this);
+        GlobalScreen.addNativeMouseListener(this);
+        GlobalScreen.addNativeMouseMotionListener(this);
+        GlobalScreen.addNativeMouseWheelListener(this);
+    }
+
+    private void detachListeners() {
+        GlobalScreen.removeNativeKeyListener(this);
+        GlobalScreen.removeNativeMouseListener(this);
+        GlobalScreen.removeNativeMouseMotionListener(this);
+        GlobalScreen.removeNativeMouseWheelListener(this);
     }
 
     private long now() {

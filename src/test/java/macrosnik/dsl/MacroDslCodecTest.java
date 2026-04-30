@@ -24,10 +24,7 @@ class MacroDslCodecTest {
         Macro macro = new Macro("Тест");
         macro.actions.add(new DelayAction(0, 500));
 
-        MouseMovePathAction clickMove = new MouseMovePathAction(0);
-        clickMove.points.add(new MouseMovePathAction.PathPoint(1087, 583, 0));
-        macro.actions.add(clickMove);
-        macro.actions.add(new MouseButtonAction(0, MouseButton.LEFT, MouseButtonActionType.CLICK));
+        macro.actions.add(new MouseButtonAction(0, MouseButton.LEFT, MouseButtonActionType.CLICK, 1087, 583));
 
         macro.actions.add(new KeyAction(0, KeyEvent.VK_ENTER, KeyActionType.DOWN));
         macro.actions.add(new KeyAction(0, KeyEvent.VK_ENTER, KeyActionType.UP));

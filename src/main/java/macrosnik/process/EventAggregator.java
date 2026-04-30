@@ -1,10 +1,16 @@
 package macrosnik.process;
 
-import macrosnik.domain.*;
+import macrosnik.domain.KeyAction;
+import macrosnik.domain.Macro;
+import macrosnik.domain.MouseButtonAction;
 import macrosnik.domain.enums.KeyActionType;
 import macrosnik.domain.enums.MouseButton;
 import macrosnik.domain.enums.MouseButtonActionType;
-import macrosnik.record.*;
+import macrosnik.record.RawEvent;
+import macrosnik.record.RawKey;
+import macrosnik.record.RawMouseButton;
+import macrosnik.record.RawMouseMove;
+import macrosnik.record.RawMouseWheel;
 import macrosnik.util.NativeKeyCodeMapper;
 
 import java.util.HashSet;
@@ -13,12 +19,6 @@ import java.util.Set;
 
 public class EventAggregator {
 
-    private final AggregationConfig config;
-
-    public EventAggregator(AggregationConfig config) {
-        this.config = config;
-    }
-
     public Macro aggregate(List<RawEvent> rawEvents) {
         Macro macro = new Macro("Recorded macro");
 
@@ -26,107 +26,146 @@ public class EventAggregator {
             return macro;
         }
 
-        long lastTime = rawEvents.get(0).timeNanos();
-        MouseMovePathBuilder pathBuilder = new MouseMovePathBuilder(config);
+        long lastTime = rawEvents.getFirst().timeNanos();
+        long carriedDelayMs = 0;
         Set<Integer> pressedKeys = new HashSet<>();
         PendingMouseButton pendingMouseButton = null;
         PendingKey pendingKey = null;
 
-        for (RawEvent ev : rawEvents) {
-            long delayMs = nanosToMs(ev.timeNanos() - lastTime);
-            lastTime = ev.timeNanos();
+        for (RawEvent event : rawEvents) {
+            long eventDelayMs = nanosToMs(event.timeNanos() - lastTime);
+            lastTime = event.timeNanos();
 
-            if (pendingMouseButton != null && !isClickRelease(pendingMouseButton, ev)) {
-                macro.actions.add(pendingMouseButton.toAction());
+            long effectiveDelayMs = carriedDelayMs + eventDelayMs;
+            carriedDelayMs = 0;
+
+            if (pendingMouseButton != null && shouldFlushMouseButtonBefore(pendingMouseButton, event)) {
+                macro.actions.add(pendingMouseButton.toDownAction());
+                effectiveDelayMs += pendingMouseButton.heldDurationMs();
                 pendingMouseButton = null;
             }
-            if (pendingKey != null && !isKeyClickRelease(pendingKey, ev)) {
-                macro.actions.add(pendingKey.toAction());
+
+            if (pendingKey != null && shouldFlushKeyBefore(pendingKey, event)) {
+                macro.actions.add(pendingKey.toDownAction());
+                effectiveDelayMs += pendingKey.heldDurationMs();
                 pendingKey = null;
             }
 
-            if (!(ev instanceof RawMouseMove)) {
-                flushPathIfNeeded(pathBuilder, macro);
-            }
-
-            if (ev instanceof RawMouseMove mm) {
-                pathBuilder.accept(mm, delayMs);
-                continue;
-            }
-
-            if (ev instanceof RawMouseButton mb) {
-                MouseButton button = toButton(mb.button());
-                if (mb.pressed()) {
-                    pendingMouseButton = new PendingMouseButton(delayMs, button);
-                } else if (pendingMouseButton != null && pendingMouseButton.button() == button) {
-                    macro.actions.add(new MouseButtonAction(
-                            pendingMouseButton.delayBeforeMs(),
-                            button,
-                            MouseButtonActionType.CLICK
-                    ));
-                    pendingMouseButton = null;
+            if (event instanceof RawMouseMove mouseMove) {
+                if (pendingMouseButton != null) {
+                    pendingMouseButton = pendingMouseButton.recordMovement(effectiveDelayMs, mouseMove.x(), mouseMove.y());
                 } else {
-                    macro.actions.add(new MouseButtonAction(
-                            delayMs,
-                            button,
-                            MouseButtonActionType.UP
-                    ));
+                    carriedDelayMs += effectiveDelayMs;
                 }
                 continue;
             }
 
-            if (ev instanceof RawKey rk) {
-                if (rk.pressed()) {
-                    if (!pressedKeys.add(rk.keyCode())) {
-                        continue;
-                    }
-                    pendingKey = new PendingKey(
-                            delayMs,
-                            rk.keyCode(),
-                            NativeKeyCodeMapper.toAwt(rk.keyCode())
+            if (event instanceof RawMouseButton mouseButton) {
+                MouseButton button = toButton(mouseButton.button());
+                if (mouseButton.pressed()) {
+                    pendingMouseButton = new PendingMouseButton(
+                            effectiveDelayMs,
+                            button,
+                            mouseButton.x(),
+                            mouseButton.y(),
+                            0,
+                            false
                     );
                     continue;
-                } else {
-                    pressedKeys.remove(rk.keyCode());
-                    if (pendingKey != null && pendingKey.nativeKeyCode() == rk.keyCode()) {
-                        macro.actions.add(new KeyAction(
-                                pendingKey.delayBeforeMs(),
-                                pendingKey.awtKeyCode(),
-                                KeyActionType.CLICK
-                        ));
-                        pendingKey = null;
-                        continue;
-                    }
                 }
 
-                macro.actions.add(new KeyAction(
-                        delayMs,
-                        NativeKeyCodeMapper.toAwt(rk.keyCode()),
-                        rk.pressed()
-                                ? KeyActionType.DOWN
-                                : KeyActionType.UP
+                if (pendingMouseButton != null && pendingMouseButton.button() == button) {
+                    if (pendingMouseButton.isClickRelease(mouseButton.x(), mouseButton.y())) {
+                        macro.actions.add(pendingMouseButton.toClickAction());
+                    } else {
+                        macro.actions.add(pendingMouseButton.toDownAction());
+                        macro.actions.add(pendingMouseButton.toUpAction(
+                                pendingMouseButton.heldDurationMs() + effectiveDelayMs,
+                                mouseButton.x(),
+                                mouseButton.y()
+                        ));
+                    }
+                    pendingMouseButton = null;
+                    continue;
+                }
+
+                macro.actions.add(new MouseButtonAction(
+                        effectiveDelayMs,
+                        button,
+                        MouseButtonActionType.UP,
+                        mouseButton.x(),
+                        mouseButton.y()
                 ));
                 continue;
             }
 
-            //if (ev instanceof RawMouseWheel mw) {}
+            if (event instanceof RawKey key) {
+                if (key.pressed()) {
+                    if (pendingKey != null && pendingKey.nativeKeyCode() == key.keyCode()) {
+                        pendingKey = pendingKey.withHeldDuration(effectiveDelayMs);
+                        continue;
+                    }
+                    if (!pressedKeys.add(key.keyCode())) {
+                        carriedDelayMs += effectiveDelayMs;
+                        continue;
+                    }
+                    pendingKey = new PendingKey(
+                            effectiveDelayMs,
+                            key.keyCode(),
+                            NativeKeyCodeMapper.toAwt(key.keyCode()),
+                            0
+                    );
+                    continue;
+                }
+
+                pressedKeys.remove(key.keyCode());
+                if (pendingKey != null && pendingKey.nativeKeyCode() == key.keyCode()) {
+                    macro.actions.add(pendingKey.toClickAction());
+                    pendingKey = null;
+                    continue;
+                }
+
+                macro.actions.add(new KeyAction(
+                        effectiveDelayMs,
+                        NativeKeyCodeMapper.toAwt(key.keyCode()),
+                        KeyActionType.UP
+                ));
+                continue;
+            }
+
+            if (event instanceof RawMouseWheel) {
+                carriedDelayMs += effectiveDelayMs;
+            }
         }
 
-        flushPathIfNeeded(pathBuilder, macro);
         if (pendingMouseButton != null) {
-            macro.actions.add(pendingMouseButton.toAction());
+            macro.actions.add(pendingMouseButton.toDownAction());
         }
         if (pendingKey != null) {
-            macro.actions.add(pendingKey.toAction());
+            macro.actions.add(pendingKey.toDownAction());
         }
         return macro;
     }
 
-    private void flushPathIfNeeded(MouseMovePathBuilder builder, Macro macro) {
-        MouseMovePathAction action = builder.buildAndReset();
-        if (action != null) {
-            macro.actions.add(action);
-        }
+    private static boolean shouldFlushMouseButtonBefore(PendingMouseButton pendingMouseButton, RawEvent event) {
+        return !(event instanceof RawMouseMove)
+                && !isMatchingMouseRelease(pendingMouseButton, event);
+    }
+
+    private static boolean shouldFlushKeyBefore(PendingKey pendingKey, RawEvent event) {
+        return !(event instanceof RawKey key) || key.keyCode() != pendingKey.nativeKeyCode();
+    }
+
+    private static boolean isMatchingMouseRelease(PendingMouseButton pendingMouseButton, RawEvent event) {
+        return event instanceof RawMouseButton mouseButton
+                && !mouseButton.pressed()
+                && pendingMouseButton.button() == toButton(mouseButton.button());
+    }
+
+    private static boolean isMatchingKeyRelease(PendingKey pendingKey, RawEvent event) {
+        return event instanceof RawKey key
+                && !key.pressed()
+                && pendingKey.nativeKeyCode() == key.keyCode();
     }
 
     private static long nanosToMs(long nanos) {
@@ -142,27 +181,52 @@ public class EventAggregator {
         };
     }
 
-    private static boolean isClickRelease(PendingMouseButton pendingMouseButton, RawEvent event) {
-        return event instanceof RawMouseButton mouseButton
-                && !mouseButton.pressed()
-                && pendingMouseButton.button() == toButton(mouseButton.button());
-    }
+    private record PendingMouseButton(long delayBeforeMs,
+                                      MouseButton button,
+                                      int pressX,
+                                      int pressY,
+                                      long heldDurationMs,
+                                      boolean moved) {
+        private PendingMouseButton recordMovement(long delayMs, int x, int y) {
+            boolean nextMoved = moved || x != pressX || y != pressY;
+            return new PendingMouseButton(
+                    delayBeforeMs,
+                    button,
+                    pressX,
+                    pressY,
+                    heldDurationMs + delayMs,
+                    nextMoved
+            );
+        }
 
-    private static boolean isKeyClickRelease(PendingKey pendingKey, RawEvent event) {
-        return event instanceof RawKey key
-                && !key.pressed()
-                && pendingKey.nativeKeyCode() == key.keyCode();
-    }
+        private boolean isClickRelease(int releaseX, int releaseY) {
+            return !moved && pressX == releaseX && pressY == releaseY;
+        }
 
-    private record PendingMouseButton(long delayBeforeMs, MouseButton button) {
-        private MouseButtonAction toAction() {
-            return new MouseButtonAction(delayBeforeMs, button, MouseButtonActionType.DOWN);
+        private MouseButtonAction toDownAction() {
+            return new MouseButtonAction(delayBeforeMs, button, MouseButtonActionType.DOWN, pressX, pressY);
+        }
+
+        private MouseButtonAction toClickAction() {
+            return new MouseButtonAction(delayBeforeMs, button, MouseButtonActionType.CLICK, pressX, pressY);
+        }
+
+        private MouseButtonAction toUpAction(long delayBeforeMs, int releaseX, int releaseY) {
+            return new MouseButtonAction(delayBeforeMs, button, MouseButtonActionType.UP, releaseX, releaseY);
         }
     }
 
-    private record PendingKey(long delayBeforeMs, int nativeKeyCode, int awtKeyCode) {
-        private KeyAction toAction() {
+    private record PendingKey(long delayBeforeMs, int nativeKeyCode, int awtKeyCode, long heldDurationMs) {
+        private PendingKey withHeldDuration(long delayMs) {
+            return new PendingKey(delayBeforeMs, nativeKeyCode, awtKeyCode, heldDurationMs + delayMs);
+        }
+
+        private KeyAction toDownAction() {
             return new KeyAction(delayBeforeMs, awtKeyCode, KeyActionType.DOWN);
+        }
+
+        private KeyAction toClickAction() {
+            return new KeyAction(delayBeforeMs, awtKeyCode, KeyActionType.CLICK);
         }
     }
 }
