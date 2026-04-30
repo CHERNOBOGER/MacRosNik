@@ -11,12 +11,17 @@ import macrosnik.domain.enums.KeyActionType;
 import macrosnik.domain.enums.MouseButton;
 import macrosnik.domain.enums.MouseButtonActionType;
 
-import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public class MacroDslCodec {
+    private static final String WAIT_UNIT_LABEL = "мс";
+    private static final String KEY_TARGET_LABEL = "клавишу";
+    private static final String KEY_COMBO_LABEL = "сочетание";
+    private static final String TEXT_TARGET_LABEL = "текст";
+    private static final String MOUSE_TARGET_LABEL = "мышь";
+    private static final String MOUSE_PATH_TARGET_LABEL = "мышью";
+
     private final DslParser parser = new DslParser();
 
     public Macro fromDsl(String text, String macroName) {
@@ -30,58 +35,66 @@ public class MacroDslCodec {
 
         List<String> lines = new ArrayList<>();
         List<Action> actions = macro.actions;
-        for (int i = 0; i < actions.size(); i++) {
+        for (int i = 0; i < actions.size(); ) {
             Action action = actions.get(i);
-            if (action.delayBeforeMs > 0) {
-                lines.add(formatWait(action.delayBeforeMs));
-            }
-
-            if (action instanceof DelayAction delayAction) {
-                lines.add(formatWait(delayAction.durationMs));
-                continue;
-            }
-
-            if (action instanceof MouseMovePathAction mouseMovePathAction) {
-                if (canInlineMouseCommand(actions, i)) {
-                    MouseButtonAction mouseButtonAction = (MouseButtonAction) actions.get(i + 1);
-                    MouseMovePathAction.PathPoint point = mouseMovePathAction.points.getFirst();
-                    lines.add(formatMouseCommand(mouseButtonAction.action, mouseButtonAction.button, point.x, point.y));
-                    i++;
-                } else if (canSummarizeMousePath(mouseMovePathAction)) {
-                    lines.add(formatMousePath(mouseMovePathAction));
-                } else {
-                    appendMousePath(lines, mouseMovePathAction);
-                }
-                continue;
-            }
-
-            if (action instanceof MouseButtonAction mouseButtonAction) {
-                lines.add(formatMouseCommand(mouseButtonAction.action, mouseButtonAction.button, null, null));
-                continue;
-            }
-
-            if (action instanceof TextInputAction textInputAction) {
-                lines.add("Ввести текст: " + quoteText(textInputAction.text));
-                continue;
-            }
-
-            if (action instanceof KeyAction keyAction) {
-                KeyComboMatch comboMatch = readKeyCombo(actions, i);
-                if (comboMatch != null) {
-                    lines.add("Нажать сочетание: " + String.join("+", comboMatch.keyNames()));
-                    i += comboMatch.length() - 1;
-                    continue;
-                }
-
-                if (canInlineKeyClick(actions, i)) {
-                    lines.add("Нажать клавишу: " + formatKeyName(keyAction.keyCode));
-                    i++;
-                } else {
-                    lines.add(formatKeyCommand(keyAction));
-                }
-            }
+            appendDelayBefore(lines, action);
+            RenderResult result = renderAction(actions, i);
+            lines.addAll(result.lines());
+            i += result.consumedActions();
         }
         return String.join("\n", lines);
+    }
+
+    private void appendDelayBefore(List<String> lines, Action action) {
+        if (action.delayBeforeMs > 0) {
+            lines.add(formatWait(action.delayBeforeMs));
+        }
+    }
+
+    private RenderResult renderAction(List<Action> actions, int index) {
+        Action action = actions.get(index);
+        if (action instanceof DelayAction delayAction) {
+            return new RenderResult(List.of(formatWait(delayAction.durationMs)), 1);
+        }
+        if (action instanceof MouseMovePathAction mouseMovePathAction) {
+            return renderMouseMoveAction(actions, index, mouseMovePathAction);
+        }
+        if (action instanceof MouseButtonAction mouseButtonAction) {
+            return new RenderResult(List.of(formatMouseCommand(mouseButtonAction)), 1);
+        }
+        if (action instanceof TextInputAction textInputAction) {
+            return new RenderResult(List.of(formatTextCommand(textInputAction.text)), 1);
+        }
+        if (action instanceof KeyAction keyAction) {
+            return renderKeyAction(actions, index, keyAction);
+        }
+        throw new IllegalArgumentException("Unsupported action type: " + action.getClass().getName());
+    }
+
+    private RenderResult renderMouseMoveAction(List<Action> actions, int index, MouseMovePathAction action) {
+        if (canInlineMouseCommand(actions, index)) {
+            MouseButtonAction mouseButtonAction = (MouseButtonAction) actions.get(index + 1);
+            MouseMovePathAction.PathPoint point = action.points.getFirst();
+            return new RenderResult(
+                    List.of(formatMouseCommand(mouseButtonAction.action, mouseButtonAction.button, point.x, point.y)),
+                    2
+            );
+        }
+        if (canSummarizeMousePath(action)) {
+            return new RenderResult(List.of(formatMousePath(action)), 1);
+        }
+        return new RenderResult(expandMousePath(action), 1);
+    }
+
+    private RenderResult renderKeyAction(List<Action> actions, int index, KeyAction keyAction) {
+        KeyComboMatch comboMatch = readKeyCombo(actions, index);
+        if (comboMatch != null) {
+            return new RenderResult(List.of(formatKeyCombo(comboMatch.keyNames())), comboMatch.length());
+        }
+        if (canInlineKeyClick(actions, index)) {
+            return new RenderResult(List.of(formatInlineKeyClick(keyAction.keyCode)), 2);
+        }
+        return new RenderResult(List.of(formatKeyCommand(keyAction)), 1);
     }
 
     private boolean canInlineMouseCommand(List<Action> actions, int index) {
@@ -94,10 +107,10 @@ public class MacroDslCodec {
         if (!(actions.get(index + 1) instanceof MouseButtonAction mouseButtonAction)) {
             return false;
         }
-        if (mouseButtonAction.delayBeforeMs > 0) {
+        if (mouseButtonAction.hasCoordinates()) {
             return false;
         }
-        if (mouseMovePathAction.points.size() != 1) {
+        if (mouseButtonAction.delayBeforeMs > 0 || mouseMovePathAction.points.size() != 1) {
             return false;
         }
         return mouseMovePathAction.points.getFirst().dtMs == 0;
@@ -149,18 +162,20 @@ public class MacroDslCodec {
 
         List<String> keyNames = new ArrayList<>();
         for (KeyAction down : downs) {
-            keyNames.add(formatKeyName(down.keyCode));
+            keyNames.add(DslKeySupport.formatKeyName(down.keyCode));
         }
         return new KeyComboMatch(keyNames, downs.size() * 2);
     }
 
-    private void appendMousePath(List<String> lines, MouseMovePathAction mouseMovePathAction) {
-        for (MouseMovePathAction.PathPoint point : mouseMovePathAction.points) {
-            lines.add("Переместить мышь: " + point.x + " " + point.y);
+    private List<String> expandMousePath(MouseMovePathAction action) {
+        List<String> lines = new ArrayList<>();
+        for (MouseMovePathAction.PathPoint point : action.points) {
+            lines.add(formatMouseMove(point.x, point.y));
             if (point.dtMs > 0) {
                 lines.add(formatWait(point.dtMs));
             }
         }
+        return lines;
     }
 
     private boolean canSummarizeMousePath(MouseMovePathAction action) {
@@ -190,13 +205,13 @@ public class MacroDslCodec {
     private String formatMousePath(MouseMovePathAction action) {
         MouseMovePathAction.PathPoint first = action.points.getFirst();
         MouseMovePathAction.PathPoint last = action.points.getLast();
-        return "Провести мышью: "
+        return DslVerb.PATH.displayText() + " " + MOUSE_PATH_TARGET_LABEL + ": "
                 + first.x + " " + first.y
                 + " -> "
                 + last.x + " " + last.y
                 + " "
                 + totalPathDuration(action)
-                + " мс";
+                + " " + WAIT_UNIT_LABEL;
     }
 
     private long totalPathDuration(MouseMovePathAction action) {
@@ -225,54 +240,43 @@ public class MacroDslCodec {
     }
 
     private String formatWait(long durationMs) {
-        return "Подождать мс: " + durationMs;
+        return DslVerb.WAIT.displayText() + " " + WAIT_UNIT_LABEL + ": " + durationMs;
+    }
+
+    private String formatMouseMove(int x, int y) {
+        return DslVerb.MOVE.displayText() + " " + MOUSE_TARGET_LABEL + ": " + x + " " + y;
+    }
+
+    private String formatMouseCommand(MouseButtonAction action) {
+        Integer x = action.hasCoordinates() ? action.x : null;
+        Integer y = action.hasCoordinates() ? action.y : null;
+        return formatMouseCommand(action.action, action.button, x, y);
     }
 
     private String formatMouseCommand(MouseButtonActionType actionType, MouseButton button, Integer x, Integer y) {
-        String prefix = switch (actionType) {
-            case CLICK -> "Нажать";
-            case DOWN -> "Зажать";
-            case UP -> "Отпустить";
-        };
-
+        String prefix = DslVerb.fromMouseAction(actionType).displayText();
         String suffix = x == null || y == null ? "" : " " + x + " " + y;
-        return prefix + " " + mouseButtonName(button) + ":" + suffix;
+        return prefix + " " + DslLexicon.mouseButtonLabel(button) + ":" + suffix;
+    }
+
+    private String formatTextCommand(String text) {
+        return DslVerb.TEXT.displayText() + " " + TEXT_TARGET_LABEL + ": " + quoteText(text);
+    }
+
+    private String formatKeyCombo(List<String> keyNames) {
+        return DslVerb.CLICK.displayText() + " " + KEY_COMBO_LABEL + ": " + String.join("+", keyNames);
+    }
+
+    private String formatInlineKeyClick(int keyCode) {
+        return DslVerb.CLICK.displayText() + " " + KEY_TARGET_LABEL + ": " + DslKeySupport.formatKeyName(keyCode);
     }
 
     private String formatKeyCommand(KeyAction keyAction) {
-        String prefix = switch (keyAction.action) {
-            case DOWN -> "Зажать клавишу: ";
-            case UP -> "Отпустить клавишу: ";
-            case CLICK -> "Нажать клавишу: ";
-        };
-        return prefix + formatKeyName(keyAction.keyCode);
-    }
-
-    private String formatKeyName(int keyCode) {
-        return switch (keyCode) {
-            case KeyEvent.VK_ENTER -> "Ввод";
-            case KeyEvent.VK_SPACE -> "Пробел";
-            case KeyEvent.VK_UP -> "Вверх";
-            case KeyEvent.VK_DOWN -> "Вниз";
-            case KeyEvent.VK_LEFT -> "Влево";
-            case KeyEvent.VK_RIGHT -> "Вправо";
-            case KeyEvent.VK_CONTROL -> "Ctrl";
-            case KeyEvent.VK_SHIFT -> "Shift";
-            case KeyEvent.VK_ALT -> "Alt";
-            case KeyEvent.VK_TAB -> "Tab";
-            case KeyEvent.VK_ESCAPE -> "Esc";
-            case KeyEvent.VK_DELETE -> "Delete";
-            case KeyEvent.VK_BACK_SPACE -> "Backspace";
-            default -> formatDefaultKeyName(keyCode);
-        };
-    }
-
-    private String formatDefaultKeyName(int keyCode) {
-        String text = KeyEvent.getKeyText(keyCode);
-        if (text == null || text.isBlank()) {
-            return "Клавиша " + keyCode;
-        }
-        return text.length() == 1 ? text.toUpperCase(Locale.ROOT) : text;
+        return DslVerb.fromKeyAction(keyAction.action).displayText()
+                + " "
+                + KEY_TARGET_LABEL
+                + ": "
+                + DslKeySupport.formatKeyName(keyAction.keyCode);
     }
 
     private String quoteText(String text) {
@@ -286,14 +290,9 @@ public class MacroDslCodec {
                 + '"';
     }
 
-    private String mouseButtonName(MouseButton button) {
-        return switch (button) {
-            case LEFT -> "ЛКМ";
-            case RIGHT -> "ПКМ";
-            case MIDDLE -> "СКМ";
-        };
+    private record KeyComboMatch(List<String> keyNames, int length) {
     }
 
-    private record KeyComboMatch(List<String> keyNames, int length) {
+    private record RenderResult(List<String> lines, int consumedActions) {
     }
 }

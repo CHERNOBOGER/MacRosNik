@@ -35,7 +35,7 @@ final class StructuredCommandResolver {
         }
 
         String[] words = normalizedHead.split(" ");
-        StructuredVerb verb = StructuredVerb.resolve(words[0]);
+        DslVerb verb = DslVerb.resolve(words[0]);
         if (verb == null) {
             throw new DslFormatException("неизвестная команда: " + originalHead);
         }
@@ -81,7 +81,7 @@ final class StructuredCommandResolver {
 
     private StructuredDslCommand resolveAction(ParsedHead head) {
         if (head.firstAttributeIs(KEY_COMBO_MARKERS)) {
-            if (head.verb().keyActionType != KeyActionType.CLICK) {
+            if (head.verb().keyActionType() != KeyActionType.CLICK) {
                 throw new DslFormatException("сочетание поддерживается только для команды нажать");
             }
             String comboText = resolveValue(head, head.trailingAttributePhrase());
@@ -95,7 +95,7 @@ final class StructuredCommandResolver {
                     head.normalizedHead(),
                     head.data(),
                     button,
-                    head.verb().mouseActionType
+                    head.verb().mouseActionType()
             );
         }
 
@@ -108,7 +108,7 @@ final class StructuredCommandResolver {
                 head.normalizedHead(),
                 head.data(),
                 keyToken,
-                head.verb().keyActionType
+                head.verb().keyActionType()
         );
     }
 
@@ -153,7 +153,7 @@ final class StructuredCommandResolver {
                               String normalizedHead,
                               List<String> attributes,
                               String data,
-                              StructuredVerb verb) {
+                              DslVerb verb) {
 
         String attributePhrase() {
             return String.join(" ", attributes);
@@ -176,36 +176,4 @@ final class StructuredCommandResolver {
         }
     }
 
-    private enum StructuredVerb {
-        WAIT(null, null, "подождать", "ждать", "пауза"),
-        CLICK(MouseButtonActionType.CLICK, KeyActionType.CLICK, "нажать", "клик", "кликнуть"),
-        HOLD(MouseButtonActionType.DOWN, KeyActionType.DOWN, "зажать"),
-        RELEASE(MouseButtonActionType.UP, KeyActionType.UP, "отпустить"),
-        MOVE(null, null, "переместить", "двигать", "мышь"),
-        PATH(null, null, "провести", "путь"),
-        TEXT(null, null, "ввести", "набрать", "печатать");
-
-        private final MouseButtonActionType mouseActionType;
-        private final KeyActionType keyActionType;
-        private final String[] aliases;
-
-        StructuredVerb(MouseButtonActionType mouseActionType,
-                       KeyActionType keyActionType,
-                       String... aliases) {
-            this.mouseActionType = mouseActionType;
-            this.keyActionType = keyActionType;
-            this.aliases = aliases;
-        }
-
-        private static StructuredVerb resolve(String token) {
-            for (StructuredVerb verb : values()) {
-                for (String alias : verb.aliases) {
-                    if (alias.equals(token)) {
-                        return verb;
-                    }
-                }
-            }
-            return null;
-        }
-    }
 }

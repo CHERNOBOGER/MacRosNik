@@ -15,59 +15,72 @@ import macrosnik.domain.enums.MouseButton;
 import macrosnik.domain.enums.MouseButtonActionType;
 
 import java.awt.event.KeyEvent;
+import java.util.List;
 
 public class MacroTableRow {
+    private static final int TEXT_PREVIEW_LIMIT = 40;
+
     private final StringProperty type = new SimpleStringProperty();
     private final StringProperty delay = new SimpleStringProperty();
     private final StringProperty details = new SimpleStringProperty();
 
-    public static MacroTableRow from(int index, Action action) {
-        MacroTableRow row = new MacroTableRow();
-        row.type.set(index + ". " + typeName(action));
-        row.delay.set(action.delayBeforeMs + " мс");
-
-        if (action instanceof DelayAction delayAction) {
-            row.details.set("Ожидание " + delayAction.durationMs + " мс");
-        } else if (action instanceof MouseMovePathAction mouseMovePathAction) {
-            int n = mouseMovePathAction.points.size();
-            if (n == 1) {
-                row.details.set("Точка: " + fmt(mouseMovePathAction.points.getFirst())
-                        + ", режим: " + modeName(mouseMovePathAction.coordinateMode));
-            } else {
-                String first = n > 0 ? fmt(mouseMovePathAction.points.get(0)) : "-";
-                String last = n > 0 ? fmt(mouseMovePathAction.points.get(n - 1)) : "-";
-                row.details.set("Точек: " + n
-                        + ", от " + first
-                        + " до " + last
-                        + ", время: " + totalPathDuration(mouseMovePathAction) + " мс"
-                        + ", режим: " + modeName(mouseMovePathAction.coordinateMode));
-            }
-        } else if (action instanceof MouseButtonAction mouseButtonAction) {
-            row.details.set(mouseButtonName(mouseButtonAction.button) + ", действие: " + mouseActionName(mouseButtonAction.action));
-        } else if (action instanceof KeyAction keyAction) {
-            row.details.set("Клавиша: " + keyName(keyAction.keyCode) + ", действие: " + keyActionName(keyAction.action));
-        } else if (action instanceof TextInputAction textInputAction) {
-            row.details.set("Текст: " + previewText(textInputAction.text));
-        } else {
-            row.details.set(action.getClass().getSimpleName());
-        }
-        return row;
+    private MacroTableRow(String type, String delay, String details) {
+        this.type.set(type);
+        this.delay.set(delay);
+        this.details.set(details);
     }
 
-    private static String typeName(Action action) {
-        if (action instanceof DelayAction) return "Пауза";
-        if (action instanceof MouseMovePathAction) return "Перемещение мыши";
-        if (action instanceof MouseButtonAction) return "Кнопка мыши";
-        if (action instanceof KeyAction) return "Клавиатура";
-        if (action instanceof TextInputAction) return "Ввод текста";
-        return action.actionType().name();
+    public static MacroTableRow from(int index, Action action) {
+        ActionSummary summary = summarize(action);
+        return new MacroTableRow((index + 1) + ". " + summary.type(), action.delayBeforeMs + " мс", summary.details());
+    }
+
+    private static ActionSummary summarize(Action action) {
+        if (action instanceof DelayAction delayAction) {
+            return new ActionSummary("Пауза", "Ожидание " + delayAction.durationMs + " мс");
+        }
+        if (action instanceof MouseMovePathAction pathAction) {
+            return new ActionSummary("Перемещение мыши", describePath(pathAction));
+        }
+        if (action instanceof MouseButtonAction mouseButtonAction) {
+            return new ActionSummary(
+                    "Кнопка мыши",
+                    describeMouseButton(mouseButtonAction)
+            );
+        }
+        if (action instanceof KeyAction keyAction) {
+            return new ActionSummary(
+                    "Клавиатура",
+                    "Клавиша: " + keyName(keyAction.keyCode) + ", действие: " + keyActionName(keyAction.action)
+            );
+        }
+        if (action instanceof TextInputAction textInputAction) {
+            return new ActionSummary("Ввод текста", "Текст: " + previewText(textInputAction.text));
+        }
+        return new ActionSummary(action.actionType().name(), action.getClass().getSimpleName());
+    }
+
+    private static String describePath(MouseMovePathAction action) {
+        List<PathPoint> points = action.points;
+        String mode = modeName(action.coordinateMode);
+        if (points.size() == 1) {
+            return "Точка: " + formatPoint(points.getFirst()) + ", режим: " + mode;
+        }
+
+        String firstPoint = points.isEmpty() ? "-" : formatPoint(points.getFirst());
+        String lastPoint = points.isEmpty() ? "-" : formatPoint(points.getLast());
+        return "Точек: " + points.size()
+                + ", от " + firstPoint
+                + " до " + lastPoint
+                + ", время: " + totalPathDuration(points) + " мс"
+                + ", режим: " + mode;
     }
 
     private static String keyActionName(KeyActionType actionType) {
         return switch (actionType) {
             case DOWN -> "нажатие";
             case UP -> "отпускание";
-            case CLICK -> "нажатие";
+            case CLICK -> "клик";
         };
     }
 
@@ -87,6 +100,14 @@ public class MacroTableRow {
         };
     }
 
+    private static String describeMouseButton(MouseButtonAction action) {
+        String details = mouseButtonName(action.button) + ", действие: " + mouseActionName(action.action);
+        if (action.hasCoordinates()) {
+            details += ", точка: (" + action.x + ", " + action.y + ")";
+        }
+        return details;
+    }
+
     private static String modeName(CoordinateMode mode) {
         return switch (mode) {
             case SCREEN_ABSOLUTE -> "экранные координаты";
@@ -95,7 +116,7 @@ public class MacroTableRow {
         };
     }
 
-    private static String fmt(PathPoint point) {
+    private static String formatPoint(PathPoint point) {
         return "(" + point.x + ", " + point.y + ")";
     }
 
@@ -115,22 +136,36 @@ public class MacroTableRow {
         if (text == null || text.isEmpty()) {
             return "\"\"";
         }
-        String normalized = text.replace("\n", "\\n");
-        if (normalized.length() > 40) {
-            normalized = normalized.substring(0, 37) + "...";
+        String normalized = text
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .replace("\n", "\\n");
+        if (normalized.length() > TEXT_PREVIEW_LIMIT) {
+            normalized = normalized.substring(0, TEXT_PREVIEW_LIMIT - 3) + "...";
         }
         return '"' + normalized + '"';
     }
 
-    private static long totalPathDuration(MouseMovePathAction action) {
+    private static long totalPathDuration(List<PathPoint> points) {
         long total = 0;
-        for (PathPoint point : action.points) {
+        for (PathPoint point : points) {
             total += point.dtMs;
         }
         return total;
     }
 
-    public StringProperty typeProperty() { return type; }
-    public StringProperty delayProperty() { return delay; }
-    public StringProperty detailsProperty() { return details; }
+    public StringProperty typeProperty() {
+        return type;
+    }
+
+    public StringProperty delayProperty() {
+        return delay;
+    }
+
+    public StringProperty detailsProperty() {
+        return details;
+    }
+
+    private record ActionSummary(String type, String details) {
+    }
 }

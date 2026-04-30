@@ -42,19 +42,18 @@ class DslParserTest {
                 Нажать клавишу: Ввод
                 """, "Тест");
 
-        assertEquals(4, macro.actions.size());
+        assertEquals(3, macro.actions.size());
 
         DelayAction delayAction = assertInstanceOf(DelayAction.class, macro.actions.get(0));
         assertEquals(300_000, delayAction.durationMs);
 
-        MouseMovePathAction moveAction = assertInstanceOf(MouseMovePathAction.class, macro.actions.get(1));
-        assertEquals(1087, moveAction.points.getFirst().x);
-        assertEquals(583, moveAction.points.getFirst().y);
-
-        MouseButtonAction mouseButtonAction = assertInstanceOf(MouseButtonAction.class, macro.actions.get(2));
+        MouseButtonAction mouseButtonAction = assertInstanceOf(MouseButtonAction.class, macro.actions.get(1));
         assertEquals(MouseButtonActionType.CLICK, mouseButtonAction.action);
+        assertTrue(mouseButtonAction.hasCoordinates());
+        assertEquals(1087, mouseButtonAction.x);
+        assertEquals(583, mouseButtonAction.y);
 
-        KeyAction keyClick = assertInstanceOf(KeyAction.class, macro.actions.get(3));
+        KeyAction keyClick = assertInstanceOf(KeyAction.class, macro.actions.get(2));
         assertEquals(KeyActionType.CLICK, keyClick.action);
     }
 
@@ -176,9 +175,34 @@ class DslParserTest {
     void ignoresInlineComments() {
         Macro macro = parser.parse("Нажать ЛКМ: 10 20 // сюда кликаем", "Тест");
 
+        assertEquals(1, macro.actions.size());
+        MouseButtonAction action = assertInstanceOf(MouseButtonAction.class, macro.actions.get(0));
+        assertTrue(action.hasCoordinates());
+        assertEquals(10, action.x);
+        assertEquals(20, action.y);
+    }
+
+    @Test
+    void ignoresHashInlineCommentsOutsideQuotedText() {
+        Macro macro = parser.parse("""
+                Подождать мс: 10 # короткая пауза
+                Ввести текст: "C#"
+                """, "Тест");
+
         assertEquals(2, macro.actions.size());
-        assertInstanceOf(MouseMovePathAction.class, macro.actions.get(0));
-        assertInstanceOf(MouseButtonAction.class, macro.actions.get(1));
+        DelayAction delayAction = assertInstanceOf(DelayAction.class, macro.actions.get(0));
+        TextInputAction textInputAction = assertInstanceOf(TextInputAction.class, macro.actions.get(1));
+        assertEquals(10, delayAction.durationMs);
+        assertEquals("C#", textInputAction.text);
+    }
+
+    @Test
+    void rejectsExtraCoordinateTokens() {
+        DslFormatException ex = assertThrows(DslFormatException.class,
+                () -> parser.parse("Нажать ЛКМ: 10 20 лишнее", "Тест"));
+
+        assertTrue(ex.getMessage().contains("Строка 1"));
+        assertTrue(ex.getMessage().contains("координаты"));
     }
 
     @Test

@@ -27,11 +27,23 @@ import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
 import java.io.InputStream;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static javafx.util.Duration.millis;
 
 public class InspectorWindow {
     private static final String APP_ICON_RESOURCE = "/icons/app.png";
+    private static final String WINDOW_TITLE = "MacRosNik - Инспектор";
+    private static final String DEFAULT_STATUS = "F6 - захват, Esc - закрыть, клик по полю - копирование.";
+    private static final String HOTKEYS_UNAVAILABLE_STATUS = "Глобальные клавиши недоступны. Используйте окно активным.";
+    private static final String SNAPSHOT_FAILED_STATUS = "Не удалось получить снимок точки.";
+    private static final String SNAPSHOT_CAPTURED_STATUS = "Точка зафиксирована.";
+    private static final String EMPTY_VALUE = "-";
+    private static final double COORDINATE_BUTTON_WIDTH = 92;
+    private static final double HEX_BUTTON_WIDTH = 102;
+    private static final int WINDOW_WIDTH = 320;
+    private static final int WINDOW_HEIGHT = 130;
     private static final int REFRESH_INTERVAL_MS = 80;
     private static final int CAPTURE_KEY_CODE = NativeKeyEvent.VC_F6;
     private static final int CLOSE_KEY_CODE = NativeKeyEvent.VC_ESCAPE;
@@ -40,22 +52,14 @@ public class InspectorWindow {
     private final Robot robot;
     private final Timeline refreshTimeline;
     private final CaptureHotkeyListener captureHotkeyListener = new CaptureHotkeyListener();
+    private ScreenProbeSnapshot currentSnapshot;
+    private ScreenProbeSnapshot frozenSnapshot;
+    private final SnapshotSection liveSection = new SnapshotSection(() -> currentSnapshot);
+    private final SnapshotSection frozenSection = new SnapshotSection(() -> frozenSnapshot);
+    private final Label statusLabel = new Label(DEFAULT_STATUS);
 
     private Stage stage;
     private boolean captureHotkeysActive;
-
-    private final Button liveCoordinatesButton = createValueButton(92);
-    private final Button liveHexButton = createValueButton(102);
-    private final Rectangle liveColorPreview = createColorPreview();
-
-    private final Button frozenCoordinatesButton = createValueButton(92);
-    private final Button frozenHexButton = createValueButton(102);
-    private final Rectangle frozenColorPreview = createColorPreview();
-
-    private final Label statusLabel = new Label("F6 - захват, Esc - закрыть, клик по полю - копирование.");
-
-    private ScreenProbeSnapshot currentSnapshot;
-    private ScreenProbeSnapshot frozenSnapshot;
 
     public InspectorWindow(Stage owner) {
         this.owner = owner;
@@ -71,79 +75,65 @@ public class InspectorWindow {
         if (!stage.isShowing()) {
             stage.show();
         }
-        startRefresh();
-        startCaptureHotkeys();
+        activateWindow();
         stage.toFront();
         stage.requestFocus();
     }
 
     public void close() {
-        stopRefresh();
-        stopCaptureHotkeys();
+        deactivateWindow();
         if (stage != null) {
             stage.close();
         }
     }
 
     private Stage createStage() {
-        configureCopyButtons();
-        updateLiveSection(null);
-        updateFrozenSection();
+        liveSection.update(null);
+        frozenSection.update(null);
 
         GridPane grid = new GridPane();
         grid.setHgap(6);
         grid.setVgap(6);
-
-        grid.add(rowLabel("Текущие"), 0, 0);
-        grid.add(liveCoordinatesButton, 1, 0);
-        grid.add(liveHexButton, 2, 0);
-        grid.add(wrapPreview(liveColorPreview), 3, 0);
-
-        grid.add(rowLabel("Фикс"), 0, 1);
-        grid.add(frozenCoordinatesButton, 1, 1);
-        grid.add(frozenHexButton, 2, 1);
-        grid.add(wrapPreview(frozenColorPreview), 3, 1);
+        liveSection.addTo(grid, 0, "Текущие");
+        frozenSection.addTo(grid, 1, "Фикс");
 
         statusLabel.setWrapText(true);
-        statusLabel.getStyleClass().add("section-subtitle");
+        statusLabel.setStyle("-fx-text-fill: #555;");
 
         VBox root = new VBox(8, grid, statusLabel);
         root.setPadding(new Insets(10));
-        root.getStyleClass().addAll("app-root", "panel-card");
 
         Stage inspectorStage = new Stage();
         inspectorStage.initOwner(owner);
-        inspectorStage.setTitle("MacRosNik - Инспектор");
-        Scene scene = new Scene(root, 320, 160);
-        UiStyles.apply(scene);
-        inspectorStage.setScene(scene);
-        inspectorStage.setMinWidth(320);
-        inspectorStage.setMinHeight(160);
-        inspectorStage.setMaxWidth(320);
-        inspectorStage.setMaxHeight(160);
+        inspectorStage.setTitle(WINDOW_TITLE);
+        inspectorStage.setScene(new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT));
+        inspectorStage.setMinWidth(WINDOW_WIDTH);
+        inspectorStage.setMinHeight(WINDOW_HEIGHT);
+        inspectorStage.setMaxWidth(WINDOW_WIDTH);
+        inspectorStage.setMaxHeight(WINDOW_HEIGHT);
         inspectorStage.setResizable(false);
         inspectorStage.setAlwaysOnTop(true);
-        inspectorStage.setOnShown(event -> {
-            startRefresh();
-            startCaptureHotkeys();
-        });
-        inspectorStage.setOnHidden(event -> {
-            stopRefresh();
-            stopCaptureHotkeys();
-        });
+        inspectorStage.setOnHidden(event -> deactivateWindow());
         applyWindowIcon(inspectorStage);
         return inspectorStage;
     }
 
-    private void configureCopyButtons() {
-        liveCoordinatesButton.setOnAction(event -> copySnapshotCoordinates(currentSnapshot));
-        liveHexButton.setOnAction(event -> copySnapshotColor(currentSnapshot));
-        frozenCoordinatesButton.setOnAction(event -> copySnapshotCoordinates(frozenSnapshot));
-        frozenHexButton.setOnAction(event -> copySnapshotColor(frozenSnapshot));
+    private void activateWindow() {
+        startRefresh();
+        startCaptureHotkeys();
+    }
+
+    private void deactivateWindow() {
+        stopRefresh();
+        stopCaptureHotkeys();
+    }
+
+    private boolean isWindowShowing() {
+        return stage != null && stage.isShowing();
     }
 
     private void startRefresh() {
-        if (stage != null && stage.isShowing()) {
+        if (isWindowShowing()) {
             refreshTimeline.play();
         }
     }
@@ -153,10 +143,11 @@ public class InspectorWindow {
     }
 
     private void refreshLiveSnapshot() {
-        if (stage == null || !stage.isShowing()) {
+        if (!isWindowShowing()) {
             return;
         }
-        updateLiveSection(readSnapshot());
+        currentSnapshot = readSnapshot();
+        liveSection.update(currentSnapshot);
     }
 
     private void captureSnapshot() {
@@ -164,46 +155,17 @@ public class InspectorWindow {
     }
 
     private void applyCapturedSnapshot(ScreenProbeSnapshot snapshot) {
-        if (stage == null || !stage.isShowing()) {
+        if (!isWindowShowing()) {
             return;
         }
         if (snapshot == null) {
-            statusLabel.setText("Не удалось получить снимок точки.");
+            setStatus(SNAPSHOT_FAILED_STATUS);
             return;
         }
 
         frozenSnapshot = snapshot;
-        updateFrozenSection();
-        statusLabel.setText("Точка зафиксирована.");
-    }
-
-    private void updateLiveSection(ScreenProbeSnapshot snapshot) {
-        currentSnapshot = snapshot;
-        if (snapshot == null) {
-            liveCoordinatesButton.setText("—");
-            liveHexButton.setText("—");
-            liveColorPreview.setFill(Color.TRANSPARENT);
-            liveCoordinatesButton.setDisable(true);
-            liveHexButton.setDisable(true);
-            return;
-        }
-
-        liveCoordinatesButton.setText(snapshot.positionText());
-        liveHexButton.setText(snapshot.hexColor());
-        liveColorPreview.setFill(toFxColor(snapshot));
-        liveCoordinatesButton.setDisable(false);
-        liveHexButton.setDisable(false);
-    }
-
-    private void updateFrozenSection() {
-        boolean hasSnapshot = frozenSnapshot != null;
-
-        frozenCoordinatesButton.setText(hasSnapshot ? frozenSnapshot.positionText() : "—");
-        frozenHexButton.setText(hasSnapshot ? frozenSnapshot.hexColor() : "—");
-        frozenColorPreview.setFill(hasSnapshot ? toFxColor(frozenSnapshot) : Color.TRANSPARENT);
-
-        frozenCoordinatesButton.setDisable(!hasSnapshot);
-        frozenHexButton.setDisable(!hasSnapshot);
+        frozenSection.update(frozenSnapshot);
+        setStatus(SNAPSHOT_CAPTURED_STATUS);
     }
 
     private ScreenProbeSnapshot readSnapshot() {
@@ -223,7 +185,7 @@ public class InspectorWindow {
     }
 
     private void startCaptureHotkeys() {
-        if (captureHotkeysActive || stage == null || !stage.isShowing()) {
+        if (captureHotkeysActive || !isWindowShowing()) {
             return;
         }
 
@@ -234,14 +196,15 @@ public class InspectorWindow {
             GlobalScreen.removeNativeKeyListener(captureHotkeyListener);
             GlobalScreen.addNativeKeyListener(captureHotkeyListener);
             captureHotkeysActive = true;
-            statusLabel.setText("F6 - захват, клик по полю - копирование.");
+            setStatus(DEFAULT_STATUS);
         } catch (NativeHookException ex) {
             captureHotkeysActive = false;
-            statusLabel.setText("Глобальные клавиши недоступны. Используйте окно активным.");
+            setStatus(HOTKEYS_UNAVAILABLE_STATUS);
         }
     }
 
     private void stopCaptureHotkeys() {
+        captureHotkeyListener.resetState();
         if (!captureHotkeysActive) {
             return;
         }
@@ -253,42 +216,37 @@ public class InspectorWindow {
         }
     }
 
-    private void copySnapshotCoordinates(ScreenProbeSnapshot snapshot) {
+    private void copySnapshotValue(ScreenProbeSnapshot snapshot, Function<ScreenProbeSnapshot, String> valueExtractor) {
         if (snapshot == null) {
             return;
         }
-        copyText(snapshot.coordinatesText());
-    }
-
-    private void copySnapshotColor(ScreenProbeSnapshot snapshot) {
-        if (snapshot == null) {
-            return;
-        }
-        copyText(snapshot.hexColor());
+        copyText(valueExtractor.apply(snapshot));
     }
 
     private void copyText(String value) {
         ClipboardContent content = new ClipboardContent();
         content.putString(value);
         Clipboard.getSystemClipboard().setContent(content);
-        statusLabel.setText("Сохранено в буфер: " + value);
+        setStatus("Скопировано в буфер: " + value);
+    }
+
+    private void setStatus(String text) {
+        statusLabel.setText(text);
     }
 
     private Label rowLabel(String text) {
         Label label = new Label(text);
         label.setMinWidth(52);
-        label.getStyleClass().add("meta-caption");
         return label;
     }
 
     private Button createValueButton(double width) {
-        Button button = new Button("—");
+        Button button = new Button(EMPTY_VALUE);
         button.setFocusTraversable(false);
         button.setAlignment(Pos.CENTER_LEFT);
         button.setPrefWidth(width);
         button.setMinWidth(width);
         button.setMaxWidth(width);
-        button.getStyleClass().addAll("utility-button", "value-button");
         return button;
     }
 
@@ -307,10 +265,6 @@ public class InspectorWindow {
         return wrapper;
     }
 
-    private Color toFxColor(ScreenProbeSnapshot snapshot) {
-        return Color.rgb(snapshot.red(), snapshot.green(), snapshot.blue());
-    }
-
     private void applyWindowIcon(Stage stage) {
         try (InputStream inputStream = InspectorWindow.class.getResourceAsStream(APP_ICON_RESOURCE)) {
             if (inputStream != null) {
@@ -320,13 +274,42 @@ public class InspectorWindow {
         }
     }
 
+    private final class SnapshotSection {
+        private final Supplier<ScreenProbeSnapshot> snapshotSupplier;
+        private final Button coordinatesButton = createValueButton(COORDINATE_BUTTON_WIDTH);
+        private final Button hexButton = createValueButton(HEX_BUTTON_WIDTH);
+        private final Rectangle colorPreview = createColorPreview();
+
+        private SnapshotSection(Supplier<ScreenProbeSnapshot> snapshotSupplier) {
+            this.snapshotSupplier = snapshotSupplier;
+            coordinatesButton.setOnAction(event -> copySnapshotValue(this.snapshotSupplier.get(), ScreenProbeSnapshot::coordinatesText));
+            hexButton.setOnAction(event -> copySnapshotValue(this.snapshotSupplier.get(), ScreenProbeSnapshot::hexColor));
+        }
+
+        private void addTo(GridPane grid, int rowIndex, String labelText) {
+            grid.add(rowLabel(labelText), 0, rowIndex);
+            grid.add(coordinatesButton, 1, rowIndex);
+            grid.add(hexButton, 2, rowIndex);
+            grid.add(wrapPreview(colorPreview), 3, rowIndex);
+        }
+
+        private void update(ScreenProbeSnapshot snapshot) {
+            boolean hasSnapshot = snapshot != null;
+            coordinatesButton.setText(hasSnapshot ? snapshot.positionText() : EMPTY_VALUE);
+            hexButton.setText(hasSnapshot ? snapshot.hexColor() : EMPTY_VALUE);
+            colorPreview.setFill(hasSnapshot ? snapshot.toFxColor() : Color.TRANSPARENT);
+            coordinatesButton.setDisable(!hasSnapshot);
+            hexButton.setDisable(!hasSnapshot);
+        }
+    }
+
     private final class CaptureHotkeyListener implements NativeKeyListener {
         private boolean captureKeyDown;
         private boolean closeKeyDown;
 
         @Override
         public void nativeKeyPressed(NativeKeyEvent event) {
-            if (stage == null || !stage.isShowing()) {
+            if (!isWindowShowing()) {
                 return;
             }
 
@@ -358,6 +341,11 @@ public class InspectorWindow {
 
         @Override
         public void nativeKeyTyped(NativeKeyEvent event) {
+        }
+
+        private void resetState() {
+            captureKeyDown = false;
+            closeKeyDown = false;
         }
     }
 }

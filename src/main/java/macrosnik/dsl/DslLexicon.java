@@ -46,6 +46,14 @@ final class DslLexicon {
         return null;
     }
 
+    static String mouseButtonLabel(MouseButton button) {
+        return switch (button) {
+            case LEFT -> "ЛКМ";
+            case RIGHT -> "ПКМ";
+            case MIDDLE -> "СКМ";
+        };
+    }
+
     static DelayUnit parseDelayUnit(String token) {
         return switch (normalize(token)) {
             case "мс", "ms" -> DelayUnit.MILLISECONDS;

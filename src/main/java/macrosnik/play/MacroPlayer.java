@@ -22,6 +22,7 @@ public class MacroPlayer {
     private volatile PlayerState state = PlayerState.IDLE;
     private volatile Thread runningThread = null;
     private volatile Consumer<PlayerState> stateListener = state -> {};
+    private volatile Consumer<Throwable> errorListener = error -> {};
 
 
     private final ActionExecutor actionExecutor = new ActionExecutor();
@@ -32,6 +33,10 @@ public class MacroPlayer {
 
     public void setStateListener(Consumer<PlayerState> stateListener) {
         this.stateListener = stateListener == null ? state -> {} : stateListener;
+    }
+
+    public void setErrorListener(Consumer<Throwable> errorListener) {
+        this.errorListener = errorListener == null ? error -> {} : errorListener;
     }
 
     public void play(Macro macro) {
@@ -57,7 +62,7 @@ public class MacroPlayer {
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             } catch (Exception e) {
-                e.printStackTrace();
+                notifyError(e);
             } finally {
                 runningThread = null;
                 setState(stopRequested ? PlayerState.STOPPED : PlayerState.IDLE);
@@ -114,6 +119,13 @@ public class MacroPlayer {
         state = next;
         try {
             stateListener.accept(next);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void notifyError(Throwable error) {
+        try {
+            errorListener.accept(error);
         } catch (Exception ignored) {
         }
     }

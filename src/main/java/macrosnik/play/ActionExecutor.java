@@ -67,6 +67,7 @@ public class ActionExecutor {
     private void executeMouseButton(MouseButtonAction action, RobotAdapter robot, MacroPlayer player) throws InterruptedException {
         player.checkpoint();
         int mask = toMask(action.button);
+        moveMouseIfNeeded(action, robot);
 
         switch (action.action) {
             case DOWN -> robot.mousePress(mask);
@@ -76,6 +77,12 @@ public class ActionExecutor {
                 sleepInterruptible(30, player);
                 robot.mouseRelease(mask);
             }
+        }
+    }
+
+    private void moveMouseIfNeeded(MouseButtonAction action, RobotAdapter robot) {
+        if (action.hasCoordinates()) {
+            robot.mouseMove(action.x, action.y);
         }
     }
 

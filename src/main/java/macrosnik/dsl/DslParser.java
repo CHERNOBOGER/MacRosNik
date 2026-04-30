@@ -11,11 +11,8 @@ import macrosnik.domain.enums.MouseButton;
 import macrosnik.domain.enums.MouseButtonActionType;
 import macrosnik.dsl.StructuredDslCommand.DelayUnit;
 
-import java.awt.event.KeyEvent;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,7 +30,7 @@ public class DslParser {
 
         List<String> errors = new ArrayList<>();
         for (int i = 0; i < lines.length; i++) {
-            String rawLine = stripUtf8Bom(stripInlineComment(lines[i])).trim();
+            String rawLine = preprocessLine(lines[i]);
             if (rawLine.isEmpty() || rawLine.startsWith("#") || rawLine.startsWith("//")) {
                 continue;
             }
@@ -81,13 +78,13 @@ public class DslParser {
         String first = DslLexicon.normalize(tokens[0]);
 
         if (first.equals("ждать") || first.equals("пауза")) {
-            requireLength(tokens, 2, line);
+            requireExactLength(tokens, 2, line);
             macro.actions.add(new DelayAction(0, parseDurationMs(tokens[1], DelayUnit.MILLISECONDS)));
             return;
         }
 
         if (first.equals("клик")) {
-            requireLength(tokens, 2, line);
+            requireExactLength(tokens, 2, line);
             macro.actions.add(new MouseButtonAction(0, parseMouseButton(tokens[1]), MouseButtonActionType.CLICK));
             return;
         }
@@ -154,15 +151,18 @@ public class DslParser {
     }
 
     private void parseMouseButtonCommand(StructuredDslCommand.MouseButtonCommand command, Macro macro) {
+        Integer x = null;
+        Integer y = null;
         if (!command.data().isBlank()) {
             int[] coordinates = parseCoordinates(command.data());
-            macro.actions.add(mouseMoveAction(coordinates[0], coordinates[1]));
+            x = coordinates[0];
+            y = coordinates[1];
         }
-        macro.actions.add(new MouseButtonAction(0, command.button(), command.actionType()));
+        macro.actions.add(new MouseButtonAction(0, command.button(), command.actionType(), x, y));
     }
 
     private void parseKeyCommand(StructuredDslCommand.KeyCommand command, Macro macro) {
-        int keyCode = parseKeyCode(command.keyToken());
+        int keyCode = DslKeySupport.parseKeyCode(command.keyToken());
         macro.actions.add(new KeyAction(0, keyCode, command.actionType()));
     }
 
@@ -171,21 +171,22 @@ public class DslParser {
         String second = DslLexicon.normalize(tokens[1]);
 
         if (second.equals("двигать") || second.equals("переместить")) {
-            requireLength(tokens, 4, line);
+            requireExactLength(tokens, 4, line);
             int x = parseInt(tokens[2], "x");
             int y = parseInt(tokens[3], "y");
             macro.actions.add(mouseMoveAction(x, y));
             return;
         }
 
+        requireExactLength(tokens, 3, line);
         MouseButton button = parseMouseButton(tokens[1]);
         MouseButtonActionType actionType = parseMouseAction(tokens[2]);
         macro.actions.add(new MouseButtonAction(0, button, actionType));
     }
 
     private void parseLegacyKey(String[] tokens, Macro macro, String line) {
-        requireLength(tokens, 3, line);
-        int keyCode = parseKeyCode(tokens[1]);
+        requireExactLength(tokens, 3, line);
+        int keyCode = DslKeySupport.parseKeyCode(tokens[1]);
         String actionToken = DslLexicon.normalize(tokens[2]);
 
         if (actionToken.equals("нажать") || actionToken.equals("клик")) {
@@ -272,40 +273,6 @@ public class DslParser {
         };
     }
 
-    private int parseKeyCode(String token) {
-        Integer russianLayoutKeyCode = DslLexicon.tryParseRussianLayoutKeyCode(token);
-        if (russianLayoutKeyCode != null) {
-            return russianLayoutKeyCode;
-        }
-
-        String normalized = DslLexicon.normalize(token).toUpperCase(Locale.ROOT).replace(' ', '_').replace('-', '_');
-        String collapsed = normalized.replace("_", "");
-        if (collapsed.length() == 1) {
-            return KeyEvent.getExtendedKeyCodeForChar(collapsed.charAt(0));
-        }
-
-        if (collapsed.matches("F\\d{1,2}")) {
-            return readKeyEventField(collapsed);
-        }
-
-        return switch (collapsed) {
-            case "CTRL", "CONTROL", "КОНТРОЛ", "КОНТРОЛЬ" -> KeyEvent.VK_CONTROL;
-            case "SHIFT", "ШИФТ" -> KeyEvent.VK_SHIFT;
-            case "ALT", "АЛЬТ" -> KeyEvent.VK_ALT;
-            case "ENTER", "ВВОД" -> KeyEvent.VK_ENTER;
-            case "ESC", "ESCAPE", "ЭСК", "ЭСКЕЙП" -> KeyEvent.VK_ESCAPE;
-            case "SPACE", "ПРОБЕЛ" -> KeyEvent.VK_SPACE;
-            case "TAB", "ТАБ", "ТАБУЛЯЦИЯ" -> KeyEvent.VK_TAB;
-            case "BACKSPACE", "БЭКСПЕЙС" -> KeyEvent.VK_BACK_SPACE;
-            case "DELETE", "DEL", "УДАЛИТЬ", "УДАЛЕНИЕ" -> KeyEvent.VK_DELETE;
-            case "UP", "ВВЕРХ" -> KeyEvent.VK_UP;
-            case "DOWN", "ВНИЗ" -> KeyEvent.VK_DOWN;
-            case "LEFT", "ВЛЕВО" -> KeyEvent.VK_LEFT;
-            case "RIGHT", "ВПРАВО" -> KeyEvent.VK_RIGHT;
-            default -> readKeyEventField("VK_" + normalized);
-        };
-    }
-
     private List<Integer> parseKeySequence(String data) {
         String[] tokens = data.split("\\s*\\+\\s*");
         List<Integer> keyCodes = new ArrayList<>();
@@ -313,7 +280,7 @@ public class DslParser {
             if (token.isBlank()) {
                 throw new DslFormatException("пустая клавиша в сочетании: " + data);
             }
-            keyCodes.add(parseKeyCode(token));
+            keyCodes.add(DslKeySupport.parseKeyCode(token));
         }
         return keyCodes;
     }
@@ -358,16 +325,6 @@ public class DslParser {
         return builder.toString();
     }
 
-    private int readKeyEventField(String fieldName) {
-        try {
-            String actualName = fieldName.startsWith("VK_") ? fieldName : "VK_" + fieldName;
-            Field field = KeyEvent.class.getField(actualName);
-            return field.getInt(null);
-        } catch (Exception e) {
-            throw new DslFormatException("неизвестная клавиша: " + fieldName.replace("VK_", ""));
-        }
-    }
-
     private long parseDurationMs(String token, DelayUnit defaultUnit) {
         String value = DslLexicon.normalizePhrase(token);
         Matcher matcher = DURATION_PATTERN.matcher(value);
@@ -390,13 +347,17 @@ public class DslParser {
 
     private int[] parseCoordinates(String data) {
         String[] tokens = data.trim().split("\\s+");
-        if (tokens.length < 2) {
+        if (tokens.length != 2) {
             throw new DslFormatException("ожидались координаты x y");
         }
         return new int[] {
                 parseInt(tokens[0], "x"),
                 parseInt(tokens[1], "y")
         };
+    }
+
+    private String preprocessLine(String line) {
+        return stripUtf8Bom(stripInlineComment(line)).trim();
     }
 
     private String stripInlineComment(String line) {
@@ -409,8 +370,21 @@ public class DslParser {
             if (!inQuotes && current == '/' && line.charAt(i + 1) == '/') {
                 return line.substring(0, i);
             }
+            if (!inQuotes && current == '#' && isHashCommentStart(line, i)) {
+                return line.substring(0, i);
+            }
+        }
+        if (!inQuotes && !line.isEmpty()) {
+            int lastIndex = line.length() - 1;
+            if (line.charAt(lastIndex) == '#' && isHashCommentStart(line, lastIndex)) {
+                return line.substring(0, lastIndex);
+            }
         }
         return line;
+    }
+
+    private boolean isHashCommentStart(String line, int index) {
+        return index == 0 || Character.isWhitespace(line.charAt(index - 1));
     }
 
     private String stripUtf8Bom(String line) {
@@ -421,7 +395,7 @@ public class DslParser {
 
     private int parseInt(String token, String fieldName) {
         try {
-            return Integer.parseInt(token.replace("мс", ""));
+            return Integer.parseInt(token);
         } catch (NumberFormatException e) {
             throw new DslFormatException("некорректное число для " + fieldName + ": " + token);
         }
@@ -436,6 +410,12 @@ public class DslParser {
     private void requireLength(String[] tokens, int minLength, String line) {
         if (tokens.length < minLength) {
             throw new DslFormatException("недостаточно аргументов: " + line);
+        }
+    }
+
+    private void requireExactLength(String[] tokens, int expectedLength, String line) {
+        if (tokens.length != expectedLength) {
+            throw new DslFormatException("ожидалось " + expectedLength + " арг., получено " + tokens.length + ": " + line);
         }
     }
 }

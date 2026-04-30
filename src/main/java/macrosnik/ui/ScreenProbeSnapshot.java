@@ -31,6 +31,10 @@ public record ScreenProbeSnapshot(int x, int y, int red, int green, int blue) {
         return red + ", " + green + ", " + blue;
     }
 
+    public javafx.scene.paint.Color toFxColor() {
+        return javafx.scene.paint.Color.rgb(red, green, blue);
+    }
+
     private static int clampColorComponent(double value) {
         return (int) Math.max(0, Math.min(255, Math.round(value * 255.0)));
     }
