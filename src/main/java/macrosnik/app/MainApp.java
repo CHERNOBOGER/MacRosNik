@@ -6,6 +6,7 @@ import javafx.scene.image.Image;
 import javafx.stage.Stage;
 import macrosnik.hotkey.PackagedJNativeHookLibraryLocator;
 import macrosnik.ui.MainController;
+import macrosnik.ui.UiStyles;
 
 import java.io.InputStream;
 
@@ -16,9 +17,12 @@ public class MainApp extends Application {
     public void start(Stage stage) {
         MainController controller = new MainController(stage);
 
-        Scene scene = new Scene(controller.root(), 987, 666);
+        Scene scene = new Scene(controller.root(), 1140, 666);
+        UiStyles.apply(scene);
         stage.setTitle("MacRosNik");
         stage.setScene(scene);
+        stage.setMinWidth(980);
+        stage.setMinHeight(640);
         applyWindowIcon(stage);
         stage.setOnCloseRequest(e -> controller.shutdown());
         stage.show();

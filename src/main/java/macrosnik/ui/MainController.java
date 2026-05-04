@@ -165,7 +165,10 @@ public class MainController {
         Label title = new Label("MacRosNik");
         title.getStyleClass().add("app-title");
 
-        VBox titleBox = new VBox(2, title);
+        Label subtitle = new Label("Запись, проверка и запуск макросов в одном окне.");
+        subtitle.getStyleClass().add("app-subtitle");
+
+        VBox titleBox = new VBox(2, title, subtitle);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -188,11 +191,15 @@ public class MainController {
 
         VBox controlsCard = new VBox(
                 12,
-                createSectionHeader("Управление макросом",""),
+                createSectionHeader(
+                        "Управление макросом",
+                        "Основные действия собраны здесь, сценарий редактируется на соседней вкладке."
+                ),
                 buildToolbar()
         );
         controlsCard.getStyleClass().add("panel-card");
-        HBox.setHgrow(controlsCard, Priority.ALWAYS);
+        controlsCard.setPrefWidth(720);
+        controlsCard.setMinWidth(540);
 
         VBox fileCard = new VBox(
                 8,
@@ -204,8 +211,9 @@ public class MainController {
         fileCard.setPrefWidth(330);
         fileCard.setMinWidth(280);
 
-        HBox panel = new HBox(12, controlsCard, fileCard);
+        FlowPane panel = new FlowPane(12, 12, controlsCard, fileCard);
         panel.setAlignment(Pos.TOP_LEFT);
+        panel.setPrefWrapLength(1040);
         return panel;
     }
 
@@ -366,8 +374,9 @@ public class MainController {
         Label hint = new Label("F8 — пауза/продолжить, F12 — экстренный стоп");
         hint.getStyleClass().add("hotkey-chip");
 
-        HBox box = new HBox(12, statusCard, hint);
+        FlowPane box = new FlowPane(12, 12, statusCard, hint);
         box.setAlignment(Pos.CENTER_LEFT);
+        box.setPrefWrapLength(1040);
         BorderPane.setMargin(box, new Insets(12, 0, 0, 0));
         return box;
     }
@@ -376,10 +385,13 @@ public class MainController {
         Label title = new Label(titleText);
         title.getStyleClass().add("section-title");
 
+        if (subtitleText == null || subtitleText.isBlank()) {
+            return new VBox(2, title);
+        }
+
         Label subtitle = new Label(subtitleText);
         subtitle.setWrapText(true);
         subtitle.getStyleClass().add("section-subtitle");
-
         return new VBox(2, title, subtitle);
     }
 
